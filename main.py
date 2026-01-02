@@ -223,9 +223,8 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             log("KeyboardInterrupt")
         else:
-            with open(f'Q_table_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.pkl', "wb") as qf:  # 保存 Q 表
-                joblib.dump(Q_table, qf)
-                log("Saved Q_table")
+            joblib.dump(Q_table, f'Q_table_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.joblib', compress=3)
+            log("Saved Q_table")
         finally:
             end_log()
             plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
@@ -239,5 +238,4 @@ if __name__ == '__main__':
             plt.savefig(f'win_rate_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.png', dpi=300)
             plt.show()
     else:
-        with open(path, "rb") as qf:  # 读取 Q 表
-            Q_table = joblib.load(qf)
+        Q_table = joblib.load(path)
