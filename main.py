@@ -1,4 +1,5 @@
 from math import exp, inf
+import matplotlib.pyplot as plt
 import random
 import time
 from os import remove
@@ -40,6 +41,7 @@ Q_table = {}
 game_round = 0  # 总游戏数
 total_round = 0  # 总回合数
 logs = ""
+test_data = [[], []]
 
 
 def get_time():  # 获取运行时间
@@ -178,7 +180,7 @@ def play_round():  # 开始一轮游戏
 
 
 def test():
-    global ROUND_PER_TEST, game_round, Q_table
+    global ROUND_PER_TEST, game_round, Q_table, test_data
     log(f"Start test after {game_round} games.")
     win_cnt = 0
     for i in range(ROUND_PER_TEST):
@@ -194,6 +196,8 @@ def test():
     log(f"Finish test after {game_round} games.")
     log(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}.")
     print(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}")
+    test_data[0].append(game_round)
+    test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
 if __name__ == '__main__':
@@ -207,13 +211,23 @@ if __name__ == '__main__':
     try:
         init_q_table()
         while True:
+            if game_round % 25000 == 0:
+                test()
             play_round()
             if total_round >= TOTAL_GAME_ROUND:
                 break
-            if game_round % 10000 == 0:
-                test()
         log("Finish all games.")
     except KeyboardInterrupt:
         log("KeyboardInterrupt")
     finally:
         end_log()
+        plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        plt.title('Win Rate', fontsize=14, fontweight='bold')
+        plt.xlabel('Games', fontsize=12)
+        plt.ylabel('Win Rate', fontsize=12)
+        plt.legend(loc='upper left')
+        plt.grid(True, alpha=0.3)
+        plt.ylim(0, 1)
+        plt.tight_layout()
+        plt.savefig('win_rate.png', dpi=300)
+        plt.show()
