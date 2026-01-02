@@ -1,4 +1,4 @@
-from math import inf
+from math import exp, inf
 import random
 import time
 from os import remove
@@ -8,7 +8,10 @@ ALPHA_MIN = 0.02
 GAMMA = 0.85
 TOTAL_EPISODES = 15
 DECAY_EPISODES = 10
-TOTAL_GAME_ROUND = 1000000
+EPSILON_START = 0.2
+EPSILON_END = 0.01
+EPSILON_DECAY = 1e-7
+TOTAL_GAME_ROUND = 5000000
 MOVEMENT_TABLE = {
     "生": {"kill": {"零"}, "need": 1, "combo": 0},
     "防": {"kill": set(), "need": 0, "combo": 0},
@@ -72,7 +75,7 @@ def init_q_table():  # 初始化 Q 表
                         Q_table[((i, k), (j, s))] = {}
                         for t in MOVEMENT_TABLE.keys():
                             if -MOVEMENT_TABLE[t]["need"] <= i and MOVEMENT_TABLE[t]["combo"] <= k:
-                                Q_table[((i, k), (j, s))].update({t: {"reward": random.random() * 2 - 1, "episode": 0}})
+                                Q_table[((i, k), (j, s))].update({t: {"reward": 0, "episode": 0}})
                                 cnt_movement += 1
                         cnt_state += 1
     log(f"Q_table {hex(hash(str(Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
@@ -87,8 +90,29 @@ def update_q_table(old_state, new_state, action, reward):  # 更新 Q 表
             return ALPHA_0 - (ALPHA_0 - ALPHA_MIN) * episode / DECAY_EPISODES
         return ALPHA_MIN
 
+    Q_table[old_state][action]["episode"] += 1
     new_episode_max_reward = max([Q_table[new_state][i]["reward"] for i in Q_table[new_state].keys()])  # 新一轮的最大奖励
     Q_table[old_state][action]["reward"] = Q_table[old_state][action]["reward"] + get_alpha(Q_table[old_state][action]["episode"]) * (reward + GAMMA * new_episode_max_reward - Q_table[old_state][action]["reward"])  # 更新 Q 表
+    Q_table[old_state][action]["reward"] = max(min(Q_table[old_state][action]["reward"], 10), -10)  # 限制奖励范围
+
+
+def choose_action(state):  # 选择动作
+    def get_epsilon(rounds):  # 获取探索率
+        global EPSILON_START, EPSILON_END, EPSILON_DECAY
+        return EPSILON_END + (EPSILON_START - EPSILON_END) * exp(-1 * rounds * EPSILON_DECAY)
+
+    movements = Q_table[state]
+    max_reward = -inf
+    action = None
+    if random.random() >= get_epsilon(total_round):
+        for i in movements.keys():
+            i_reward = movements[i]["reward"]
+            if i_reward >= max_reward:
+                max_reward = i_reward
+                action = i
+    else:
+        action = random.choice(list(movements.keys()))
+    return action
 
 
 def play_round():  # 开始一轮游戏
@@ -98,33 +122,10 @@ def play_round():  # 开始一轮游戏
     round_cnt = 0
     while flag:  # 循环直到结束一轮游戏
         # log(f"Start game {game_round} round {round_cnt}.")
-        old_state_a, old_state_b = (state_a, state_b), (state_b, state_a)
-        movements_for_a, movements_for_b = Q_table[(state_a, state_b)], Q_table[(state_b, state_a)]
-        max_reward_for_a, max_reward_for_b = -inf, -inf
         now_reward_a, now_reward_b = 0, 0
-        action_for_a, action_for_b = None, None
-        if random.randrange(10) != 0:
-            for i in movements_for_a.keys():
-                i_reward = movements_for_a[i]["reward"]
-                if i_reward > max_reward_for_a:
-                    max_reward_for_a = i_reward
-                    action_for_a = i
-        else:
-            action_for_a = random.choice(list(movements_for_a.keys()))
-        if random.randrange(10) != 0:
-            for i in movements_for_b.keys():
-                i_reward = movements_for_b[i]["reward"]
-                if i_reward > max_reward_for_b:
-                    max_reward_for_b = i_reward
-                    action_for_b = i
-        else:
-            action_for_b = random.choice(list(movements_for_b.keys()))
-        if action_for_a is None or action_for_b is None:
-            log("What the fuck!")
-            raise KeyError
-        movements_for_a[action_for_a]["episode"] += 1
-        movements_for_b[action_for_b]["episode"] += 1
+        old_state_a, old_state_b = state_a, state_b
 
+        action_for_a, action_for_b = choose_action((state_a, state_b)), choose_action((state_b, state_a))
         if action_for_b in MOVEMENT_TABLE[action_for_a]["kill"]:
             log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
             flag = False
@@ -155,8 +156,8 @@ def play_round():  # 开始一轮游戏
             now_reward_b += 2 ** -game_round
 
         # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
-        update_q_table(old_state_a, (state_a, state_b), action_for_a, now_reward_a)
-        update_q_table(old_state_b, (state_b, state_a), action_for_b, now_reward_b)
+        update_q_table((old_state_a, old_state_b), (state_a, state_b), action_for_a, now_reward_a)
+        update_q_table((old_state_b, old_state_a), (state_b, state_a), action_for_b, now_reward_b)
         round_cnt += 1
     log(f"Finish game {game_round} after {round_cnt} round(s).")
     total_round += round_cnt
@@ -181,9 +182,5 @@ if __name__ == '__main__':
         log("Finish all games.")
     except KeyboardInterrupt:
         log("KeyboardInterrupt")
-    except KeyError as e:
-        log(f"KeyError: {e}")
-    except Exception as e:
-        log(f"Exception: {e}")
     finally:
         end_log()
