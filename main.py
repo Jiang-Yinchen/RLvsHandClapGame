@@ -1,9 +1,9 @@
-import joblib
 from math import exp, inf
-import matplotlib.pyplot as plt
 import random
 import time
 from os import remove
+import joblib
+import matplotlib.pyplot as plt
 
 ALPHA_0 = 0.2
 ALPHA_MIN = 0.02
@@ -65,6 +65,28 @@ def end_log():  # 结束一轮日志，并写入文件
     logs = ""
 
 
+def blur(state):
+    if state[0] == 0:
+        state0 = 0
+    elif state[0] <= 2:
+        state0 = 1
+    elif state[0] <= 5:
+        state0 = 2
+    elif state[0] <= 8:
+        state0 = 3
+    elif state[0] <= 11:
+        state0 = 4
+    else:
+        state0 = 5
+    if state[1] == 0:
+        state1 = 0
+    elif state[1] <= 2:
+        state1 = 1
+    else:
+        state1 = 2
+    return state0, state1
+
+
 def init_q_table():  # 初始化 Q 表
     global MOVEMENT_TABLE
     log("Start initializing Q_table.")
@@ -72,9 +94,9 @@ def init_q_table():  # 初始化 Q 表
     cnt_state = 0
     # 使用循环变量来纪念 Dijkstra
     for i in range(16):  # 我的”生“数量
-        for j in range(16):  # 对方的”生“数量
+        for j in range(6):  # 对方的”生“数量（模糊后）
             for k in range(6):  # 我的连续”生“数量
-                for s in range(6):  # 对方的连续”生“数量
+                for s in range(3):  # 对方的连续”生“数量（模糊后）
                     if i >= k and j >= s:
                         Q_table[((i, k), (j, s))] = {}
                         for t in MOVEMENT_TABLE.keys():
@@ -135,6 +157,7 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
             player_a_state = (player_a_state[0], 0)
         elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
             player_a_state = (player_a_state[0], 0)
+            now_reward_a += 0.1
         elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
             player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
         player_a_state = (min(player_a_state[0] - MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
@@ -142,11 +165,14 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
             player_b_state = (player_b_state[0], 0)
         elif MOVEMENT_TABLE[player_b_action]["need"] > 0:
             player_b_state = (player_b_state[0], 0)
+            now_reward_b += 0.1
         elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
             player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
         player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
-        now_reward_a += 2 ** -game_round
-        now_reward_b += 2 ** -game_round
+        now_reward_a += 0.6 ** game_round - 0.1
+        now_reward_b += 0.6 ** game_round - 0.1
+        now_reward_a += 0.05 * player_a_state[0] + 0.04 * player_a_state[1]
+        now_reward_b += 0.05 * player_b_state[0] + 0.04 * player_b_state[1]
     return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
 
 
@@ -159,24 +185,26 @@ def play_round():  # 开始一轮游戏
         # log(f"Start game {game_round} round {round_cnt}.")
         old_state_a, old_state_b = state_a, state_b
 
-        action_for_a, action_for_b = choose_action((state_a, state_b)), choose_action((state_b, state_a))
+        action_for_a, action_for_b = choose_action((state_a, blur(state_b))), choose_action((state_b, blur(state_a)))
         flag, state_a, state_b, now_reward_a, now_reward_b = judge(state_a, state_b, action_for_a, action_for_b)
 
         if flag == 0:
             pass
             # log(f"In game {game_round}, Player A uses {player_a_action} and Player B uses {player_b_action}!")
         elif flag == 1:
-            log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
+            pass
+            # log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
         elif flag == -1:
-            log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
+            pass
+            # log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
 
         # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
-        update_q_table((old_state_a, old_state_b), (state_a, state_b), action_for_a, now_reward_a)
-        update_q_table((old_state_b, old_state_a), (state_b, state_a), action_for_b, now_reward_b)
+        update_q_table((old_state_a, blur(old_state_b)), (state_a, blur(state_b)), action_for_a, now_reward_a)
+        update_q_table((old_state_b, blur(old_state_a)), (state_b, blur(state_a)), action_for_b, now_reward_b)
         round_cnt += 1
-    log(f"Finish game {game_round} after {round_cnt} round(s).")
+    # log(f"Finish game {game_round} after {round_cnt} round(s).")
     total_round += round_cnt
-    log(f"Total round: {total_round}.")
+    # log(f"Total round: {total_round}.")
     game_round += 1
 
 
@@ -252,3 +280,9 @@ if __name__ == "__main__":
         plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
         plt.show()
         print(f"Finish all things after {get_time():.3f}s.")
+        # a = []
+        # for i in range(16):
+        #     a.append(Q_table[((i, 0), (0, 0))]["生"]["reward"])
+        #     print(a[-1])
+        # plt.plot(a)
+        # plt.show()
