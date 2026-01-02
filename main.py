@@ -7,7 +7,7 @@ from os import remove
 
 ALPHA_0 = 0.2
 ALPHA_MIN = 0.02
-GAMMA = 0.85
+GAMMA = 0.9
 TOTAL_EPISODES = 15
 DECAY_EPISODES = 10
 EPSILON_START = 0.2
@@ -15,29 +15,29 @@ EPSILON_END = 0.01
 EPSILON_DECAY = 5e-7
 TOTAL_GAME_ROUND = 5000000
 ROUND_PER_TEST = 2000
+START_TIME = -inf
 MOVEMENT_TABLE = {
-    "生": {"kill": {"零"}, "need": 1, "combo": 0},
+    "生": {"kill": {"零"}, "need": -1, "combo": 0},
     "防": {"kill": set(), "need": 0, "combo": 0},
     "飞": {"kill": set(), "need": 0, "combo": 0},
-    "单": {"kill": {"生", "地"}, "need": -1, "combo": 0},
-    "双": {"kill": {"生", "一", "地"}, "need": -2, "combo": 0},
-    "弯": {"kill": {"单", "双", "镖", "地", "机"}, "need": -1, "combo": 0},
-    "刺": {"kill": {"弯", "肥", "地"}, "need": -1, "combo": 0},
-    "肥": {"kill": {"防", "飞", "弯"}, "need": -5, "combo": 0},
-    "镖": {"kill": {"飞"}, "need": -3, "combo": 0},
+    "单": {"kill": {"生", "地"}, "need": 1, "combo": 0},
+    "双": {"kill": {"生", "一", "地"}, "need": 2, "combo": 0},
+    "弯": {"kill": {"单", "双", "镖", "地", "机"}, "need": 1, "combo": 0},
+    "刺": {"kill": {"弯", "肥", "地"}, "need": 1, "combo": 0},
+    "肥": {"kill": {"防", "飞", "弯"}, "need": 5, "combo": 0},
+    "镖": {"kill": {"飞"}, "need": 3, "combo": 0},
     "零": {"kill": {"防"}, "need": 0, "combo": 0},
-    "一": {"kill": set(), "need": 1, "combo": 1},
-    "二": {"kill": set(), "need": 2, "combo": 2},
-    "三": {"kill": set(), "need": 3, "combo": 3},
-    "四": {"kill": set(), "need": 4, "combo": 4},
-    "五": {"kill": set(), "need": 5, "combo": 5},
-    "胡": {"kill": {"生", "厨"}, "need": -1, "combo": 0},
-    "菜": {"kill": {"胡"}, "need": -1, "combo": 0},
-    "厨": {"kill": {"菜"}, "need": -2, "combo": 0},
-    "地": {"kill": {"生", "一", "二", "三", "四", "五"}, "need": -3, "combo": 0},
-    "机": {"kill": {"生", "防", "飞", "单", "双", "刺", "肥", "镖", "一", "二", "三", "四", "五", "胡", "菜", "厨", "地"}, "need": -10, "combo": 0}
+    "一": {"kill": set(), "need": -1, "combo": 1},
+    "二": {"kill": set(), "need": -2, "combo": 2},
+    "三": {"kill": set(), "need": -3, "combo": 3},
+    "四": {"kill": set(), "need": -4, "combo": 4},
+    "五": {"kill": set(), "need": -5, "combo": 5},
+    "胡": {"kill": {"生", "厨"}, "need": 1, "combo": 0},
+    "菜": {"kill": {"胡"}, "need": 1, "combo": 0},
+    "厨": {"kill": {"菜"}, "need": 2, "combo": 0},
+    "地": {"kill": {"生", "一", "二", "三", "四", "五"}, "need": 3, "combo": 0},
+    "机": {"kill": {"生", "防", "飞", "单", "双", "刺", "肥", "镖", "一", "二", "三", "四", "五", "胡", "菜", "厨", "地"}, "need": 10, "combo": 0}
 }
-START_TIME = -inf
 Q_table = {}
 game_round = 0  # 总游戏数
 total_round = 0  # 总回合数
@@ -78,7 +78,7 @@ def init_q_table():  # 初始化 Q 表
                     if i >= k and j >= s:
                         Q_table[((i, k), (j, s))] = {}
                         for t in MOVEMENT_TABLE.keys():
-                            if -MOVEMENT_TABLE[t]["need"] <= i and MOVEMENT_TABLE[t]["combo"] <= k:
+                            if MOVEMENT_TABLE[t]["need"] <= i and MOVEMENT_TABLE[t]["combo"] <= k:
                                 Q_table[((i, k), (j, s))].update({t: {"reward": 0, "episode": 0}})
                                 cnt_movement += 1
                         cnt_state += 1
@@ -133,18 +133,18 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
     else:
         if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
             player_a_state = (player_a_state[0], 0)
-        elif MOVEMENT_TABLE[player_a_action]["need"] < 0:
+        elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
             player_a_state = (player_a_state[0], 0)
         elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
             player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
-        player_a_state = (min(player_a_state[0] + MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
+        player_a_state = (min(player_a_state[0] - MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
         if MOVEMENT_TABLE[player_b_action]["combo"] != 0:
             player_b_state = (player_b_state[0], 0)
-        elif MOVEMENT_TABLE[player_b_action]["need"] < 0:
+        elif MOVEMENT_TABLE[player_b_action]["need"] > 0:
             player_b_state = (player_b_state[0], 0)
         elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
             player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
-        player_b_state = (min(player_b_state[0] + MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
+        player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
         now_reward_a += 2 ** -game_round
         now_reward_b += 2 ** -game_round
     return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
@@ -201,41 +201,54 @@ def test():
     test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     path = input("Input path to load Q_table or press Enter to start a new training: ")
-    if path == "":
-        random.seed(42)
-        START_TIME = time.time()
-        try:
-            remove("log.txt")
-        except FileNotFoundError:
-            pass
-        log("Start game.")
-        try:
-            init_q_table()
-            while True:
-                if game_round % 25000 == 0:
-                    test()
-                play_round()
-                if total_round >= TOTAL_GAME_ROUND:
-                    break
-            log("Finish all games.")
-        except KeyboardInterrupt:
-            log("KeyboardInterrupt")
-        else:
-            joblib.dump(Q_table, f'Q_table_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.joblib', compress=3)
-            log("Saved Q_table")
-        finally:
-            end_log()
-            plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
-            plt.title('Win Rate', fontsize=14, fontweight='bold')
-            plt.xlabel('Games', fontsize=12)
-            plt.ylabel('Win Rate', fontsize=12)
-            plt.legend(loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.ylim(0, 1)
-            plt.tight_layout()
-            plt.savefig(f'win_rate_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.png', dpi=300)
-            plt.show()
-    else:
+    random.seed(42)
+    START_TIME = time.time()
+    if path != "":
         Q_table = joblib.load(path)
+        log(f"Load Q_table {hex(hash(str(Q_table)))}.")
+        ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST = joblib.load("config_" + path)
+    try:
+        remove("log.txt")
+    except FileNotFoundError:
+        pass
+    log("Start game.")
+    try:
+        init_q_table()
+        while True:
+            if game_round % 25000 == 0:
+                test()
+            play_round()
+            if total_round >= TOTAL_GAME_ROUND:
+                break
+        log("Finish all games.")
+    except KeyboardInterrupt:
+        log("KeyboardInterrupt")
+    else:
+        if path != "":
+            path += "_" + str(TOTAL_GAME_ROUND)
+        else:
+            path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
+        joblib.dump(Q_table, path, compress=4)
+        log(f"Saved Q_table in file {path}")
+        configs = (ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST)
+        joblib.dump(configs, path.replace(".joblib", ".config.joblib"), compress=4)
+        log(f"Saved configs in file {path.replace('.joblib', '.config.joblib')}")
+        with open("training-records.txt", "a") as rf:
+            for config in configs:
+                rf.write(str(config) + ", " if config != configs[-1] else ": ")
+            rf.write(f"{test_data[1][-1]:.2%}, {get_time():.3f}s\n")
+    finally:
+        end_log()
+        plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        plt.title("Win Rate", fontsize=14, fontweight="bold")
+        plt.xlabel("Games", fontsize=12)
+        plt.ylabel("Win Rate", fontsize=12)
+        plt.legend(loc="upper left")
+        plt.grid(True, alpha=0.3)
+        plt.ylim(0, 1)
+        plt.tight_layout()
+        plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
+        plt.show()
+        print(f"Finish all things after {get_time():.3f}s.")
