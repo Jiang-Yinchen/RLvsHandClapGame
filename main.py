@@ -12,6 +12,7 @@ EPSILON_START = 0.2
 EPSILON_END = 0.01
 EPSILON_DECAY = 1e-7
 TOTAL_GAME_ROUND = 5000000
+ROUND_PER_TEST = 2000
 MOVEMENT_TABLE = {
     "生": {"kill": {"零"}, "need": 1, "combo": 0},
     "防": {"kill": set(), "need": 0, "combo": 0},
@@ -55,7 +56,7 @@ def log(message):  # 记录日志
 
 def end_log():  # 结束一轮日志，并写入文件
     global logs
-    print(logs, end="")
+    # print(logs, end="")
     with open("log.txt", "a", encoding="utf-8") as f:
         f.write(logs)
     logs = ""
@@ -115,45 +116,56 @@ def choose_action(state):  # 选择动作
     return action
 
 
+def judge(player_a_state, player_b_state, player_a_action, player_b_action):
+    now_reward_a, now_reward_b = 0, 0
+    ended = 0
+    if player_b_action in MOVEMENT_TABLE[player_a_action]["kill"]:
+        now_reward_a += 5
+        now_reward_b -= 5
+        ended = 1
+    elif player_a_action in MOVEMENT_TABLE[player_b_action]["kill"]:
+        now_reward_a -= 5
+        now_reward_b += 5
+        ended = -1
+    else:
+        if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
+            player_a_state = (player_a_state[0], 0)
+        elif MOVEMENT_TABLE[player_a_action]["need"] < 0:
+            player_a_state = (player_a_state[0], 0)
+        elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
+            player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
+        player_a_state = (min(player_a_state[0] + MOVEMENT_TABLE[player_a_action]["need"], 10), player_a_state[1])
+        if MOVEMENT_TABLE[player_b_action]["combo"] != 0:
+            player_b_state = (player_b_state[0], 0)
+        elif MOVEMENT_TABLE[player_b_action]["need"] < 0:
+            player_b_state = (player_b_state[0], 0)
+        elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
+            player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
+        player_b_state = (min(player_b_state[0] + MOVEMENT_TABLE[player_b_action]["need"], 10), player_b_state[1])
+        now_reward_a += 2 ** -game_round
+        now_reward_b += 2 ** -game_round
+    return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
+
+
 def play_round():  # 开始一轮游戏
     global MOVEMENT_TABLE, game_round, total_round, Q_table
     state_a, state_b = (0, 0), (0, 0)
-    flag = True
+    flag = 0
     round_cnt = 0
-    while flag:  # 循环直到结束一轮游戏
+    while flag == 0:  # 循环直到结束一轮游戏
         # log(f"Start game {game_round} round {round_cnt}.")
-        now_reward_a, now_reward_b = 0, 0
         old_state_a, old_state_b = state_a, state_b
 
         action_for_a, action_for_b = choose_action((state_a, state_b)), choose_action((state_b, state_a))
-        if action_for_b in MOVEMENT_TABLE[action_for_a]["kill"]:
+        flag, state_a, state_b, now_reward_a, now_reward_b = judge(state_a, state_b, action_for_a, action_for_b)
+
+        if flag == 0:
+            pass
+            # log(f"In game {game_round}, Player A uses {player_a_action} and Player B uses {player_b_action}!")
+        elif flag == 1:
             log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
-            flag = False
-            now_reward_a += 5
-            now_reward_b -= 5
-        elif action_for_a in MOVEMENT_TABLE[action_for_b]["kill"]:
+        elif flag == -1:
             log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
-            flag = False
-            now_reward_a -= 5
-            now_reward_b += 5
-        else:
-            if MOVEMENT_TABLE[action_for_a]["combo"] != 0:
-                state_a = (state_a[0], 0)
-            elif MOVEMENT_TABLE[action_for_a]["need"] < 0:
-                state_a = (state_a[0], 0)
-            elif MOVEMENT_TABLE[action_for_a]["need"] != 0:
-                state_a = (state_a[0], min(state_a[1] + 1, 5))
-            state_a = (min(state_a[0] + MOVEMENT_TABLE[action_for_a]["need"], 10), state_a[1])
-            if MOVEMENT_TABLE[action_for_b]["combo"] != 0:
-                state_b = (state_b[0], 0)
-            elif MOVEMENT_TABLE[action_for_b]["need"] < 0:
-                state_b = (state_b[0], 0)
-            elif MOVEMENT_TABLE[action_for_b]["need"] != 0:
-                state_b = (state_b[0], min(state_b[1] + 1, 5))
-            state_b = (min(state_b[0] + MOVEMENT_TABLE[action_for_b]["need"], 10), state_b[1])
-            # log(f"In game {game_round}, Player A uses {action_for_a} and Player B uses {action_for_b}!")
-            now_reward_a += 2 ** -game_round
-            now_reward_b += 2 ** -game_round
 
         # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
         update_q_table((old_state_a, old_state_b), (state_a, state_b), action_for_a, now_reward_a)
@@ -163,6 +175,25 @@ def play_round():  # 开始一轮游戏
     total_round += round_cnt
     log(f"Total round: {total_round}.")
     game_round += 1
+
+
+def test():
+    global ROUND_PER_TEST, game_round, Q_table
+    log(f"Start test after {game_round} games.")
+    win_cnt = 0
+    for i in range(ROUND_PER_TEST):
+        while True:
+            state_a, state_b = (0, 0), (0, 0)
+            action_a = choose_action((state_a, state_b))  # 按照 Q 表选择动作
+            action_b = random.choice(list(Q_table[(state_b, state_a)].keys()))  # 随机选择动作
+            flag, state_a, state_b, _, _ = judge(state_a, state_b, action_a, action_b)
+            if flag != 0:
+                if flag == 1:
+                    win_cnt += 1
+                break
+    log(f"Finish test after {game_round} games.")
+    log(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}.")
+    print(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}")
 
 
 if __name__ == '__main__':
@@ -179,6 +210,8 @@ if __name__ == '__main__':
             play_round()
             if total_round >= TOTAL_GAME_ROUND:
                 break
+            if game_round % 10000 == 0:
+                test()
         log("Finish all games.")
     except KeyboardInterrupt:
         log("KeyboardInterrupt")
