@@ -1,3 +1,4 @@
+import joblib
 from math import exp, inf
 import matplotlib.pyplot as plt
 import random
@@ -11,7 +12,7 @@ TOTAL_EPISODES = 15
 DECAY_EPISODES = 10
 EPSILON_START = 0.2
 EPSILON_END = 0.01
-EPSILON_DECAY = 1e-7
+EPSILON_DECAY = 5e-7
 TOTAL_GAME_ROUND = 5000000
 ROUND_PER_TEST = 2000
 MOVEMENT_TABLE = {
@@ -59,8 +60,8 @@ def log(message):  # 记录日志
 def end_log():  # 结束一轮日志，并写入文件
     global logs
     # print(logs, end="")
-    with open("log.txt", "a", encoding="utf-8") as f:
-        f.write(logs)
+    with open("log.txt", "a", encoding="utf-8") as lf:
+        lf.write(logs)
     logs = ""
 
 
@@ -70,8 +71,8 @@ def init_q_table():  # 初始化 Q 表
     cnt_movement = 0
     cnt_state = 0
     # 使用循环变量来纪念 Dijkstra
-    for i in range(11):  # 我的”生“数量
-        for j in range(11):  # 对方的”生“数量
+    for i in range(16):  # 我的”生“数量
+        for j in range(16):  # 对方的”生“数量
             for k in range(6):  # 我的连续”生“数量
                 for s in range(6):  # 对方的连续”生“数量
                     if i >= k and j >= s:
@@ -136,14 +137,14 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
             player_a_state = (player_a_state[0], 0)
         elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
             player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
-        player_a_state = (min(player_a_state[0] + MOVEMENT_TABLE[player_a_action]["need"], 10), player_a_state[1])
+        player_a_state = (min(player_a_state[0] + MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
         if MOVEMENT_TABLE[player_b_action]["combo"] != 0:
             player_b_state = (player_b_state[0], 0)
         elif MOVEMENT_TABLE[player_b_action]["need"] < 0:
             player_b_state = (player_b_state[0], 0)
         elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
             player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
-        player_b_state = (min(player_b_state[0] + MOVEMENT_TABLE[player_b_action]["need"], 10), player_b_state[1])
+        player_b_state = (min(player_b_state[0] + MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
         now_reward_a += 2 ** -game_round
         now_reward_b += 2 ** -game_round
     return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
@@ -201,33 +202,42 @@ def test():
 
 
 if __name__ == '__main__':
-    random.seed(42)
-    START_TIME = time.time()
-    try:
-        remove("log.txt")
-    except FileNotFoundError:
-        pass
-    log("Start game.")
-    try:
-        init_q_table()
-        while True:
-            if game_round % 25000 == 0:
-                test()
-            play_round()
-            if total_round >= TOTAL_GAME_ROUND:
-                break
-        log("Finish all games.")
-    except KeyboardInterrupt:
-        log("KeyboardInterrupt")
-    finally:
-        end_log()
-        plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
-        plt.title('Win Rate', fontsize=14, fontweight='bold')
-        plt.xlabel('Games', fontsize=12)
-        plt.ylabel('Win Rate', fontsize=12)
-        plt.legend(loc='upper left')
-        plt.grid(True, alpha=0.3)
-        plt.ylim(0, 1)
-        plt.tight_layout()
-        plt.savefig('win_rate.png', dpi=300)
-        plt.show()
+    path = input("Input path to load Q_table or press Enter to start a new training: ")
+    if path == "":
+        random.seed(42)
+        START_TIME = time.time()
+        try:
+            remove("log.txt")
+        except FileNotFoundError:
+            pass
+        log("Start game.")
+        try:
+            init_q_table()
+            while True:
+                if game_round % 25000 == 0:
+                    test()
+                play_round()
+                if total_round >= TOTAL_GAME_ROUND:
+                    break
+            log("Finish all games.")
+        except KeyboardInterrupt:
+            log("KeyboardInterrupt")
+        else:
+            with open(f'Q_table_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.pkl', "wb") as qf:  # 保存 Q 表
+                joblib.dump(Q_table, qf)
+                log("Saved Q_table")
+        finally:
+            end_log()
+            plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+            plt.title('Win Rate', fontsize=14, fontweight='bold')
+            plt.xlabel('Games', fontsize=12)
+            plt.ylabel('Win Rate', fontsize=12)
+            plt.legend(loc='upper left')
+            plt.grid(True, alpha=0.3)
+            plt.ylim(0, 1)
+            plt.tight_layout()
+            plt.savefig(f'win_rate_{time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())}.png', dpi=300)
+            plt.show()
+    else:
+        with open(path, "rb") as qf:  # 读取 Q 表
+            Q_table = joblib.load(qf)
