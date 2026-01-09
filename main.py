@@ -5,18 +5,7 @@ from os import remove
 import joblib
 import matplotlib.pyplot as plt
 
-HYPERPARAMETER_DICT = {
-    "ALPHA_0": 0.2,
-    "ALPHA_MIN": 0.02,
-    "GAMMA": 0.9,
-    "TOTAL_EPISODES": 15,
-    "DECAY_EPISODES": 10,
-    "EPSILON_START": 0.2,
-    "EPSILON_END": 0.01,
-    "EPSILON_DECAY": 5e-7,
-    "TOTAL_GAME_ROUND": 2000000,
-    "ROUND_PER_TEST": 2000
-}
+HYPERPARAMETER_DICT = {}
 ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST = None, None, None, None, None, None, None, None, None, None
 MOVEMENT_TABLE = {
     "生": {"kill": {"零"}, "need": -1, "combo": 0},
@@ -70,20 +59,28 @@ def end_log():  # 结束一轮日志，并写入文件
 def blur(state):
     if state[0] == 0:
         state0 = 0
-    elif state[0] <= 2:
+    elif state[0] <= 1:
         state0 = 1
-    elif state[0] <= 5:
+    elif state[0] <= 3:
         state0 = 2
-    elif state[0] <= 9:
+    elif state[0] <= 5:
         state0 = 3
-    else:
+    elif state[0] <= 7:
         state0 = 4
+    elif state[0] <= 10:
+        state0 = 5
+    elif state[0] <= 12:
+        state0 = 6
+    else:
+        state0 = 7
     if state[1] == 0:
         state1 = 0
-    elif state[1] <= 2:
+    elif state[1] <= 1:
         state1 = 1
-    else:
+    elif state[1] <= 3:
         state1 = 2
+    else:
+        state1 = 3
     return state0, state1
 
 
@@ -94,9 +91,9 @@ def init_q_table():  # 初始化 Q 表
     cnt_state = 0
     # 使用循环变量来纪念 Dijkstra
     for i in range(16):  # 我的”生“数量
-        for j in range(5):  # 对方的”生“数量（模糊后）
+        for j in range(8):  # 对方的”生“数量（模糊后）
             for k in range(6):  # 我的连续”生“数量
-                for s in range(3):  # 对方的连续”生“数量（模糊后）
+                for s in range(4):  # 对方的连续”生“数量（模糊后）
                     if i >= k and j >= s:
                         Q_table[((i, k), (j, s))] = {}
                         for t in MOVEMENT_TABLE.keys():
@@ -160,7 +157,6 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
             player_a_state = (player_a_state[0], 0)
         elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
             player_a_state = (player_a_state[0], 0)
-            now_reward_a += 0.1
         elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
             player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
         player_a_state = (min(player_a_state[0] - MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
@@ -168,14 +164,9 @@ def judge(player_a_state, player_b_state, player_a_action, player_b_action):
             player_b_state = (player_b_state[0], 0)
         elif MOVEMENT_TABLE[player_b_action]["need"] > 0:
             player_b_state = (player_b_state[0], 0)
-            now_reward_b += 0.1
         elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
             player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
         player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
-        now_reward_a += 0.6 ** game_round - 0.1
-        now_reward_b += 0.6 ** game_round - 0.1
-        now_reward_a += 0.05 * player_a_state[0] + 0.04 * player_a_state[1]
-        now_reward_b += 0.05 * player_b_state[0] + 0.04 * player_b_state[1]
     return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
 
 
@@ -241,6 +232,12 @@ if __name__ == "__main__":
         Q_table = joblib.load(path)
         log(f"Load Q_table {hex(hash(str(Q_table)))}.")
         HYPERPARAMETER_DICT = joblib.load("config_" + path)
+    else:
+        init_q_table()
+        try:
+            HYPERPARAMETER_DICT = joblib.load("config.joblib")
+        except FileNotFoundError:
+            pass
     try:
         remove("log.txt")
     except FileNotFoundError:
@@ -248,7 +245,6 @@ if __name__ == "__main__":
     log("Start game.")
     TOTAL_GAME_ROUND = HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
-        init_q_table()
         while True:
             if game_round % 25000 == 0:
                 test()
@@ -282,9 +278,3 @@ if __name__ == "__main__":
         plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
         print(f"Finish all things after {get_time():.3f}s.")
         plt.show()
-        # a = []
-        # for i in range(16):
-        #     a.append(Q_table[((i, 0), (0, 0))]["生"]["reward"])
-        #     print(a[-1])
-        # plt.plot(a)
-        # plt.show()
