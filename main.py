@@ -5,17 +5,19 @@ from os import remove
 import joblib
 import matplotlib.pyplot as plt
 
-ALPHA_0 = 0.2
-ALPHA_MIN = 0.02
-GAMMA = 0.9
-TOTAL_EPISODES = 15
-DECAY_EPISODES = 10
-EPSILON_START = 0.2
-EPSILON_END = 0.01
-EPSILON_DECAY = 5e-7
-TOTAL_GAME_ROUND = 5000000
-ROUND_PER_TEST = 2000
-START_TIME = -inf
+HYPERPARAMETER_DICT = {
+    "ALPHA_0": 0.2,
+    "ALPHA_MIN": 0.02,
+    "GAMMA": 0.9,
+    "TOTAL_EPISODES": 15,
+    "DECAY_EPISODES": 10,
+    "EPSILON_START": 0.2,
+    "EPSILON_END": 0.01,
+    "EPSILON_DECAY": 5e-7,
+    "TOTAL_GAME_ROUND": 2000000,
+    "ROUND_PER_TEST": 2000
+}
+ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST = None, None, None, None, None, None, None, None, None, None
 MOVEMENT_TABLE = {
     "生": {"kill": {"零"}, "need": -1, "combo": 0},
     "防": {"kill": set(), "need": 0, "combo": 0},
@@ -72,12 +74,10 @@ def blur(state):
         state0 = 1
     elif state[0] <= 5:
         state0 = 2
-    elif state[0] <= 8:
+    elif state[0] <= 9:
         state0 = 3
-    elif state[0] <= 11:
-        state0 = 4
     else:
-        state0 = 5
+        state0 = 4
     if state[1] == 0:
         state1 = 0
     elif state[1] <= 2:
@@ -94,7 +94,7 @@ def init_q_table():  # 初始化 Q 表
     cnt_state = 0
     # 使用循环变量来纪念 Dijkstra
     for i in range(16):  # 我的”生“数量
-        for j in range(6):  # 对方的”生“数量（模糊后）
+        for j in range(5):  # 对方的”生“数量（模糊后）
             for k in range(6):  # 我的连续”生“数量
                 for s in range(3):  # 对方的连续”生“数量（模糊后）
                     if i >= k and j >= s:
@@ -108,10 +108,12 @@ def init_q_table():  # 初始化 Q 表
 
 
 def update_q_table(old_state, new_state, action, reward):  # 更新 Q 表
-    global Q_table, GAMMA
+    global Q_table, HYPERPARAMETER_DICT
+    GAMMA = HYPERPARAMETER_DICT["GAMMA"]
 
     def get_alpha(episode):  # 获取学习率
-        global ALPHA_0, ALPHA_MIN, DECAY_EPISODES
+        global HYPERPARAMETER_DICT
+        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = HYPERPARAMETER_DICT["ALPHA_0"], HYPERPARAMETER_DICT["ALPHA_MIN"], HYPERPARAMETER_DICT["DECAY_EPISODES"]
         if episode < DECAY_EPISODES:
             return ALPHA_0 - (ALPHA_0 - ALPHA_MIN) * episode / DECAY_EPISODES
         return ALPHA_MIN
@@ -124,7 +126,8 @@ def update_q_table(old_state, new_state, action, reward):  # 更新 Q 表
 
 def choose_action(state):  # 选择动作
     def get_epsilon(rounds):  # 获取探索率
-        global EPSILON_START, EPSILON_END, EPSILON_DECAY
+        global HYPERPARAMETER_DICT
+        EPSILON_START, EPSILON_END, EPSILON_DECAY = HYPERPARAMETER_DICT["EPSILON_START"], HYPERPARAMETER_DICT["EPSILON_END"], HYPERPARAMETER_DICT["EPSILON_DECAY"]
         return EPSILON_END + (EPSILON_START - EPSILON_END) * exp(-1 * rounds * EPSILON_DECAY)
 
     movements = Q_table[state]
@@ -209,7 +212,8 @@ def play_round():  # 开始一轮游戏
 
 
 def test():
-    global ROUND_PER_TEST, game_round, Q_table, test_data
+    global HYPERPARAMETER_DICT, game_round, Q_table, test_data
+    ROUND_PER_TEST = HYPERPARAMETER_DICT["ROUND_PER_TEST"]
     log(f"Start test after {game_round} games.")
     win_cnt = 0
     for i in range(ROUND_PER_TEST):
@@ -229,19 +233,20 @@ def test():
     test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
+START_TIME = time.time()
 if __name__ == "__main__":
     path = input("Input path to load Q_table or press Enter to start a new training: ")
     random.seed(42)
-    START_TIME = time.time()
     if path != "":
         Q_table = joblib.load(path)
         log(f"Load Q_table {hex(hash(str(Q_table)))}.")
-        ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST = joblib.load("config_" + path)
+        HYPERPARAMETER_DICT = joblib.load("config_" + path)
     try:
         remove("log.txt")
     except FileNotFoundError:
         pass
     log("Start game.")
+    TOTAL_GAME_ROUND = HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         init_q_table()
         while True:
@@ -260,13 +265,10 @@ if __name__ == "__main__":
             path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
         joblib.dump(Q_table, path, compress=4)
         log(f"Saved Q_table in file {path}")
-        configs = (ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST)
-        joblib.dump(configs, path.replace(".joblib", ".config.joblib"), compress=4)
+        joblib.dump(HYPERPARAMETER_DICT, path.replace(".joblib", ".config.joblib"), compress=4)
         log(f"Saved configs in file {path.replace('.joblib', '.config.joblib')}")
         with open("training-records.txt", "a") as rf:
-            for config in configs:
-                rf.write(str(config) + ", " if config != configs[-1] else ": ")
-            rf.write(f"{test_data[1][-1]:.2%}, {get_time():.3f}s\n")
+            rf.write(f"{HYPERPARAMETER_DICT}: {test_data[1][-1]:.2%}, {get_time():.3f}s\n")
     finally:
         end_log()
         plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
@@ -278,8 +280,8 @@ if __name__ == "__main__":
         plt.ylim(0, 1)
         plt.tight_layout()
         plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
-        plt.show()
         print(f"Finish all things after {get_time():.3f}s.")
+        plt.show()
         # a = []
         # for i in range(16):
         #     a.append(Q_table[((i, 0), (0, 0))]["生"]["reward"])
