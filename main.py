@@ -224,7 +224,7 @@ def test():
     test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
-START_TIME = time.time()
+START_TIME = -inf
 if __name__ == "__main__":
     path = input("Input path to load Q_table or press Enter to start a new training: ")
     random.seed(42)
@@ -238,10 +238,18 @@ if __name__ == "__main__":
             HYPERPARAMETER_DICT = joblib.load("config.joblib")
         except FileNotFoundError:
             pass
+        while True:
+            s = input("Input hyperparameters or press Enter to start training: ")
+            if s == "":
+                break
+            s = s.split("=")
+            HYPERPARAMETER_DICT[s[0]] = eval(s[1])
+        joblib.dump(HYPERPARAMETER_DICT, "config.joblib", compress=4)
     try:
         remove("log.txt")
     except FileNotFoundError:
         pass
+    START_TIME = time.time()
     log("Start game.")
     TOTAL_GAME_ROUND = HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
