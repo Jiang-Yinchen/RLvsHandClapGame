@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from math import exp, inf
 import random
 import time
@@ -5,277 +6,301 @@ from os import remove
 import joblib
 import matplotlib.pyplot as plt
 
-HYPERPARAMETER_DICT = {}
-ALPHA_0, ALPHA_MIN, GAMMA, TOTAL_EPISODES, DECAY_EPISODES, EPSILON_START, EPSILON_END, EPSILON_DECAY, TOTAL_GAME_ROUND, ROUND_PER_TEST = None, None, None, None, None, None, None, None, None, None
-MOVEMENT_TABLE = {
-    "生": {"kill": {"零"}, "need": -1, "combo": 0},
-    "防": {"kill": set(), "need": 0, "combo": 0},
-    "飞": {"kill": set(), "need": 0, "combo": 0},
-    "单": {"kill": {"生", "地"}, "need": 1, "combo": 0},
-    "双": {"kill": {"生", "一", "地"}, "need": 2, "combo": 0},
-    "弯": {"kill": {"单", "双", "镖", "地", "机"}, "need": 1, "combo": 0},
-    "刺": {"kill": {"弯", "肥", "地"}, "need": 1, "combo": 0},
-    "肥": {"kill": {"防", "飞", "弯"}, "need": 5, "combo": 0},
-    "镖": {"kill": {"飞"}, "need": 3, "combo": 0},
-    "零": {"kill": {"防"}, "need": 0, "combo": 0},
-    "一": {"kill": set(), "need": -1, "combo": 1},
-    "二": {"kill": set(), "need": -2, "combo": 2},
-    "三": {"kill": set(), "need": -3, "combo": 3},
-    "四": {"kill": set(), "need": -4, "combo": 4},
-    "五": {"kill": set(), "need": -5, "combo": 5},
-    "胡": {"kill": {"生", "厨"}, "need": 1, "combo": 0},
-    "菜": {"kill": {"胡"}, "need": 1, "combo": 0},
-    "厨": {"kill": {"菜"}, "need": 2, "combo": 0},
-    "地": {"kill": {"生", "一", "二", "三", "四", "五"}, "need": 3, "combo": 0},
-    "机": {"kill": {"生", "防", "飞", "单", "双", "刺", "肥", "镖", "一", "二", "三", "四", "五", "胡", "菜", "厨", "地"}, "need": 10, "combo": 0}
-}
-Q_table = {}
-game_round = 0  # 总游戏数
-total_round = 0  # 总回合数
-logs = ""
-test_data = [[], []]
+
+class AbstractActor(ABC):
+    @abstractmethod
+    def choose_action(self, state):
+        pass
 
 
-def get_time():  # 获取运行时间
-    global START_TIME
-    return time.time() - START_TIME
+class Foolish(AbstractActor):
+    def __init__(self, MOVEMENT_TABLE):
+        self.MOVEMENT_TABLE = MOVEMENT_TABLE
+
+    def choose_action(self, state):
+        # 蓄水池抽样
+        index = 1
+        chosen = None
+        for i in self.MOVEMENT_TABLE.keys():
+            if self.MOVEMENT_TABLE[i]["need"] <= state[0][0] and self.MOVEMENT_TABLE[i]["combo"] <= state[0][1]:
+                if random.random() < 1 / index:
+                    chosen = i
+                index += 1
+        return chosen
 
 
-def log(message):  # 记录日志
-    global logs
-    logs += f"{get_time():.3f}: {message}\n"
-    if len(logs) > 1000000:
-        end_log()
-
-
-def end_log():  # 结束一轮日志，并写入文件
-    global logs
-    # print(logs, end="")
-    with open("log.txt", "a", encoding="utf-8") as lf:
-        lf.write(logs)
+class Agent(AbstractActor):
     logs = ""
+    START_TIME = time.time()
 
+    def __init__(self):
+        self.HYPERPARAMETER_DICT = {}
+        self.MOVEMENT_TABLE = {
+            "生": {"kill": {"零"}, "need": -1, "combo": 0},
+            "防": {"kill": set(), "need": 0, "combo": 0},
+            "飞": {"kill": set(), "need": 0, "combo": 0},
+            "单": {"kill": {"生", "地"}, "need": 1, "combo": 0},
+            "双": {"kill": {"生", "一", "地"}, "need": 2, "combo": 0},
+            "弯": {"kill": {"单", "双", "镖", "地", "机"}, "need": 1, "combo": 0},
+            "刺": {"kill": {"弯", "肥", "地"}, "need": 1, "combo": 0},
+            "肥": {"kill": {"防", "飞", "弯"}, "need": 5, "combo": 0},
+            "镖": {"kill": {"飞"}, "need": 3, "combo": 0},
+            "零": {"kill": {"防"}, "need": 0, "combo": 0},
+            "一": {"kill": set(), "need": -1, "combo": 1},
+            "二": {"kill": set(), "need": -2, "combo": 2},
+            "三": {"kill": set(), "need": -3, "combo": 3},
+            "四": {"kill": set(), "need": -4, "combo": 4},
+            "五": {"kill": set(), "need": -5, "combo": 5},
+            "胡": {"kill": {"生", "厨"}, "need": 1, "combo": 0},
+            "菜": {"kill": {"胡"}, "need": 1, "combo": 0},
+            "厨": {"kill": {"菜"}, "need": 2, "combo": 0},
+            "地": {"kill": {"生", "一", "二", "三", "四", "五"}, "need": 3, "combo": 0},
+            "机": {"kill": {"生", "防", "飞", "单", "双", "刺", "肥", "镖", "一", "二", "三", "四", "五", "胡", "菜", "厨", "地"}, "need": 10, "combo": 0}
+        }
+        self.START_TIME = time.time()
+        self.Q_table = {}
+        self.game_round = 0  # 总游戏数
+        self.total_round = 0  # 总回合数
+        self.test_data = [[], []]
+        self.path = ""
 
-def blur(state):
-    if state[0] == 0:
-        state0 = 0
-    elif state[0] <= 1:
-        state0 = 1
-    elif state[0] <= 3:
-        state0 = 2
-    elif state[0] <= 5:
-        state0 = 3
-    elif state[0] <= 7:
-        state0 = 4
-    elif state[0] <= 10:
-        state0 = 5
-    elif state[0] <= 12:
-        state0 = 6
-    else:
-        state0 = 7
-    if state[1] == 0:
-        state1 = 0
-    elif state[1] <= 1:
-        state1 = 1
-    elif state[1] <= 3:
-        state1 = 2
-    else:
-        state1 = 3
-    return state0, state1
+    def init_q_table_and_configs(self):
+        self.path = input("Input path to load Q_table or press Enter to start a new training: ")
+        if self.path != "":
+            self.Q_table = joblib.load(self.path)
+            Agent.log(f"Load Q_table {hex(hash(str(self.Q_table)))}.")
+            self.HYPERPARAMETER_DICT = joblib.load(self.path.replace(".joblib", ".config.joblib"))
+        else:
+            self.init_q_table()
+            try:
+                self.HYPERPARAMETER_DICT = joblib.load("config.joblib")
+            except FileNotFoundError:
+                pass
+            while True:
+                s = input("Input hyperparameters or press Enter to start training: ")
+                if s == "":
+                    break
+                s = s.split("=")
+                self.HYPERPARAMETER_DICT[s[0]] = eval(s[1])
+            joblib.dump(self.HYPERPARAMETER_DICT, "config.joblib", compress=4)
 
+    def save_q_table_and_configs(self):
+        if self.path != "":
+            self.path += "_" + str(TOTAL_GAME_ROUND)
+        else:
+            self.path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
+        joblib.dump(self.Q_table, self.path, compress=4)
+        Agent.log(f"Saved Q_table in file {self.path}")
+        joblib.dump(self.HYPERPARAMETER_DICT, self.path.replace(".joblib", ".config.joblib"), compress=4)
+        Agent.log(f"Saved configs in file {self.path.replace('.joblib', '.config.joblib')}")
+        with open("training-records.txt", "a") as rf:
+            rf.write(f"{self.HYPERPARAMETER_DICT}: {self.test_data[1][-1]:.2%}, {Agent.get_time():.3f}s\n")
 
-def init_q_table():  # 初始化 Q 表
-    global MOVEMENT_TABLE
-    log("Start initializing Q_table.")
-    cnt_movement = 0
-    cnt_state = 0
-    # 使用循环变量来纪念 Dijkstra
-    for i in range(16):  # 我的”生“数量
-        for j in range(8):  # 对方的”生“数量（模糊后）
-            for k in range(6):  # 我的连续”生“数量
-                for s in range(4):  # 对方的连续”生“数量（模糊后）
-                    if i >= k and j >= s:
-                        Q_table[((i, k), (j, s))] = {}
-                        for t in MOVEMENT_TABLE.keys():
-                            if MOVEMENT_TABLE[t]["need"] <= i and MOVEMENT_TABLE[t]["combo"] <= k:
-                                Q_table[((i, k), (j, s))].update({t: {"reward": 0, "episode": 0}})
-                                cnt_movement += 1
-                        cnt_state += 1
-    log(f"Q_table {hex(hash(str(Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
+    @staticmethod
+    def get_time():  # 获取运行时间
+        return time.time() - Agent.START_TIME
 
+    @staticmethod
+    def log(message):  # 记录日志
+        Agent.logs += f"{Agent.get_time():.3f}: {message}\n"
+        if len(Agent.logs) > 1000000:
+            Agent.end_log()
 
-def update_q_table(old_state, new_state, action, reward):  # 更新 Q 表
-    global Q_table, HYPERPARAMETER_DICT
-    GAMMA = HYPERPARAMETER_DICT["GAMMA"]
+    @staticmethod
+    def end_log():  # 结束一轮日志，并写入文件
+        # print(Agent.logs, end="")
+        print(open)
+        with open("log.txt", "a", encoding="utf-8") as lf:
+            lf.write(Agent.logs)
+        Agent.logs = ""
 
-    def get_alpha(episode):  # 获取学习率
-        global HYPERPARAMETER_DICT
-        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = HYPERPARAMETER_DICT["ALPHA_0"], HYPERPARAMETER_DICT["ALPHA_MIN"], HYPERPARAMETER_DICT["DECAY_EPISODES"]
+    @staticmethod
+    def blur(state):
+        if state[0] == 0:
+            state0 = 0
+        elif state[0] <= 1:
+            state0 = 1
+        elif state[0] <= 3:
+            state0 = 2
+        elif state[0] <= 5:
+            state0 = 3
+        elif state[0] <= 7:
+            state0 = 4
+        elif state[0] <= 10:
+            state0 = 5
+        elif state[0] <= 12:
+            state0 = 6
+        else:
+            state0 = 7
+        if state[1] == 0:
+            state1 = 0
+        elif state[1] <= 1:
+            state1 = 1
+        elif state[1] <= 3:
+            state1 = 2
+        else:
+            state1 = 3
+        return state0, state1
+
+    def init_q_table(self):  # 初始化 Q 表
+        self.log("Start initializing Q_table.")
+        cnt_movement = 0
+        cnt_state = 0
+        # 使用循环变量来纪念 Dijkstra
+        for i in range(16):  # 我的”生“数量
+            for j in range(8):  # 对方的”生“数量（模糊后）
+                for k in range(6):  # 我的连续”生“数量
+                    for s in range(4):  # 对方的连续”生“数量（模糊后）
+                        if i >= k and j >= s:
+                            self.Q_table[((i, k), (j, s))] = {}
+                            for t in self.MOVEMENT_TABLE.keys():
+                                if self.MOVEMENT_TABLE[t]["need"] <= i and self.MOVEMENT_TABLE[t]["combo"] <= k:
+                                    self.Q_table[((i, k), (j, s))].update({t: {"reward": 0, "episode": 0}})
+                                    cnt_movement += 1
+                            cnt_state += 1
+        self.log(f"Q_table {hex(hash(str(self.Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
+
+    def get_alpha(self, episode):  # 获取学习率
+        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["DECAY_EPISODES"]
         if episode < DECAY_EPISODES:
             return ALPHA_0 - (ALPHA_0 - ALPHA_MIN) * episode / DECAY_EPISODES
         return ALPHA_MIN
 
-    Q_table[old_state][action]["episode"] += 1
-    new_episode_max_reward = max([Q_table[new_state][i]["reward"] for i in Q_table[new_state].keys()])  # 新一轮的最大奖励
-    Q_table[old_state][action]["reward"] = Q_table[old_state][action]["reward"] + get_alpha(Q_table[old_state][action]["episode"]) * (reward + GAMMA * new_episode_max_reward - Q_table[old_state][action]["reward"])  # 更新 Q 表
-    Q_table[old_state][action]["reward"] = max(min(Q_table[old_state][action]["reward"], 10), -10)  # 限制奖励范围
+    def update_q_table(self, old_state, new_state, action, reward):  # 更新 Q 表
+        GAMMA = self.HYPERPARAMETER_DICT["GAMMA"]
 
+        self.Q_table[old_state][action]["episode"] += 1
+        new_episode_max_reward = max([self.Q_table[new_state][i]["reward"] for i in self.Q_table[new_state].keys()])  # 新一轮的最大奖励
+        old = self.Q_table[old_state][action]["reward"]
+        self.Q_table[old_state][action]["reward"] = old + self.get_alpha(self.Q_table[old_state][action]["episode"]) * (reward + GAMMA * new_episode_max_reward - old)  # 更新 Q 表
+        self.Q_table[old_state][action]["reward"] = max(min(self.Q_table[old_state][action]["reward"], 10), -10)  # 限制奖励范围
 
-def choose_action(state):  # 选择动作
-    def get_epsilon(rounds):  # 获取探索率
-        global HYPERPARAMETER_DICT
-        EPSILON_START, EPSILON_END, EPSILON_DECAY = HYPERPARAMETER_DICT["EPSILON_START"], HYPERPARAMETER_DICT["EPSILON_END"], HYPERPARAMETER_DICT["EPSILON_DECAY"]
+    def get_epsilon(self, rounds):  # 获取探索率
+        EPSILON_START, EPSILON_END, EPSILON_DECAY = self.HYPERPARAMETER_DICT["EPSILON_START"], self.HYPERPARAMETER_DICT["EPSILON_END"], self.HYPERPARAMETER_DICT["EPSILON_DECAY"]
         return EPSILON_END + (EPSILON_START - EPSILON_END) * exp(-1 * rounds * EPSILON_DECAY)
 
-    movements = Q_table[state]
-    max_reward = -inf
-    action = None
-    if random.random() >= get_epsilon(total_round):
-        for i in movements.keys():
-            i_reward = movements[i]["reward"]
-            if i_reward >= max_reward:
-                max_reward = i_reward
-                action = i
-    else:
-        action = random.choice(list(movements.keys()))
-    return action
+    def choose_action(self, state):  # 选择动作
+        movements = self.Q_table[state]
+        max_reward = -inf
+        action = None
+        if random.random() >= self.get_epsilon(self.total_round):
+            for i in movements.keys():
+                i_reward = movements[i]["reward"]
+                if i_reward >= max_reward:
+                    max_reward = i_reward
+                    action = i
+        else:
+            action = random.choice(list(movements.keys()))
+        return action
 
+    @staticmethod
+    def judge(player_a_state, player_b_state, player_a_action, player_b_action, MOVEMENT_TABLE):
+        now_reward_a, now_reward_b = 0, 0
+        ended = 0
+        if player_b_action in MOVEMENT_TABLE[player_a_action]["kill"]:
+            now_reward_a += 5
+            now_reward_b -= 5
+            ended = 1
+        elif player_a_action in MOVEMENT_TABLE[player_b_action]["kill"]:
+            now_reward_a -= 5
+            now_reward_b += 5
+            ended = -1
+        else:
+            if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
+                player_a_state = (player_a_state[0], 0)
+            elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
+                player_a_state = (player_a_state[0], 0)
+            elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
+                player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
+            player_a_state = (min(player_a_state[0] - MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
+            if MOVEMENT_TABLE[player_b_action]["combo"] != 0:
+                player_b_state = (player_b_state[0], 0)
+            elif MOVEMENT_TABLE[player_b_action]["need"] > 0:
+                player_b_state = (player_b_state[0], 0)
+            elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
+                player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
+            player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
+        return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
 
-def judge(player_a_state, player_b_state, player_a_action, player_b_action):
-    now_reward_a, now_reward_b = 0, 0
-    ended = 0
-    if player_b_action in MOVEMENT_TABLE[player_a_action]["kill"]:
-        now_reward_a += 5
-        now_reward_b -= 5
-        ended = 1
-    elif player_a_action in MOVEMENT_TABLE[player_b_action]["kill"]:
-        now_reward_a -= 5
-        now_reward_b += 5
-        ended = -1
-    else:
-        if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
-            player_a_state = (player_a_state[0], 0)
-        elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
-            player_a_state = (player_a_state[0], 0)
-        elif MOVEMENT_TABLE[player_a_action]["need"] != 0:
-            player_a_state = (player_a_state[0], min(player_a_state[1] + 1, 5))
-        player_a_state = (min(player_a_state[0] - MOVEMENT_TABLE[player_a_action]["need"], 15), player_a_state[1])
-        if MOVEMENT_TABLE[player_b_action]["combo"] != 0:
-            player_b_state = (player_b_state[0], 0)
-        elif MOVEMENT_TABLE[player_b_action]["need"] > 0:
-            player_b_state = (player_b_state[0], 0)
-        elif MOVEMENT_TABLE[player_b_action]["need"] != 0:
-            player_b_state = (player_b_state[0], min(player_b_state[1] + 1, 5))
-        player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
-    return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
+    def play_round(self):  # 开始一轮游戏
+        state_a, state_b = (0, 0), (0, 0)
+        flag = 0
+        round_cnt = 0
+        while flag == 0:  # 循环直到结束一轮游戏
+            # log(f"Start game {game_round} round {round_cnt}.")
+            old_state_a, old_state_b = state_a, state_b
 
+            action_for_a, action_for_b = self.choose_action((state_a, Agent.blur(state_b))), self.choose_action((state_b, Agent.blur(state_a)))
+            flag, state_a, state_b, now_reward_a, now_reward_b = self.judge(state_a, state_b, action_for_a, action_for_b, self.MOVEMENT_TABLE)
 
-def play_round():  # 开始一轮游戏
-    global MOVEMENT_TABLE, game_round, total_round, Q_table
-    state_a, state_b = (0, 0), (0, 0)
-    flag = 0
-    round_cnt = 0
-    while flag == 0:  # 循环直到结束一轮游戏
-        # log(f"Start game {game_round} round {round_cnt}.")
-        old_state_a, old_state_b = state_a, state_b
+            if flag == 0:
+                pass
+                # log(f"In game {game_round}, Player A uses {player_a_action} and Player B uses {player_b_action}!")
+            elif flag == 1:
+                pass
+                # log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
+            elif flag == -1:
+                pass
+                # log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
 
-        action_for_a, action_for_b = choose_action((state_a, blur(state_b))), choose_action((state_b, blur(state_a)))
-        flag, state_a, state_b, now_reward_a, now_reward_b = judge(state_a, state_b, action_for_a, action_for_b)
+            # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
+            self.update_q_table((old_state_a, Agent.blur(old_state_b)), (state_a, Agent.blur(state_b)), action_for_a, now_reward_a)
+            self.update_q_table((old_state_b, Agent.blur(old_state_a)), (state_b, Agent.blur(state_a)), action_for_b, now_reward_b)
+            round_cnt += 1
+        # log(f"Finish game {game_round} after {round_cnt} round(s).")
+        self.total_round += round_cnt
+        # log(f"Total round: {total_round}.")
+        self.game_round += 1
 
-        if flag == 0:
-            pass
-            # log(f"In game {game_round}, Player A uses {player_a_action} and Player B uses {player_b_action}!")
-        elif flag == 1:
-            pass
-            # log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
-        elif flag == -1:
-            pass
-            # log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
-
-        # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
-        update_q_table((old_state_a, blur(old_state_b)), (state_a, blur(state_b)), action_for_a, now_reward_a)
-        update_q_table((old_state_b, blur(old_state_a)), (state_b, blur(state_a)), action_for_b, now_reward_b)
-        round_cnt += 1
-    # log(f"Finish game {game_round} after {round_cnt} round(s).")
-    total_round += round_cnt
-    # log(f"Total round: {total_round}.")
-    game_round += 1
-
-
-def test():
-    global HYPERPARAMETER_DICT, game_round, Q_table, test_data
-    ROUND_PER_TEST = HYPERPARAMETER_DICT["ROUND_PER_TEST"]
-    log(f"Start test after {game_round} games.")
-    win_cnt = 0
-    for i in range(ROUND_PER_TEST):
-        while True:
-            state_a, state_b = (0, 0), (0, 0)
-            action_a = choose_action((state_a, state_b))  # 按照 Q 表选择动作
-            action_b = random.choice(list(Q_table[(state_b, state_a)].keys()))  # 随机选择动作
-            flag, state_a, state_b, _, _ = judge(state_a, state_b, action_a, action_b)
-            if flag != 0:
-                if flag == 1:
-                    win_cnt += 1
-                break
-    log(f"Finish test after {game_round} games.")
-    log(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}.")
-    print(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}")
-    test_data[0].append(game_round)
-    test_data[1].append(win_cnt / ROUND_PER_TEST)
+    @staticmethod
+    def test(Agent1, Agent2):
+        ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
+        Agent.log(f"Start test after {Agent1.game_round} games.")
+        win_cnt = 0
+        for i in range(ROUND_PER_TEST):
+            while True:
+                state_a, state_b = (0, 0), (0, 0)
+                action_a = Agent1.choose_action((state_a, state_b))  # 按照 Q 表选择动作
+                action_b = Agent2.choose_action((state_b, state_a))
+                flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
+                if flag != 0:
+                    if flag == 1:
+                        win_cnt += 1
+                    break
+        Agent.log(f"Finish test after {Agent1.game_round} games.")
+        Agent.log(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}.")
+        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}")
+        Agent1.test_data[0].append(Agent1.game_round)
+        Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
 START_TIME = -inf
 if __name__ == "__main__":
-    path = input("Input path to load Q_table or press Enter to start a new training: ")
     random.seed(42)
-    if path != "":
-        Q_table = joblib.load(path)
-        log(f"Load Q_table {hex(hash(str(Q_table)))}.")
-        HYPERPARAMETER_DICT = joblib.load("config_" + path)
-    else:
-        init_q_table()
-        try:
-            HYPERPARAMETER_DICT = joblib.load("config.joblib")
-        except FileNotFoundError:
-            pass
-        while True:
-            s = input("Input hyperparameters or press Enter to start training: ")
-            if s == "":
-                break
-            s = s.split("=")
-            HYPERPARAMETER_DICT[s[0]] = eval(s[1])
-        joblib.dump(HYPERPARAMETER_DICT, "config.joblib", compress=4)
     try:
         remove("log.txt")
     except FileNotFoundError:
         pass
-    START_TIME = time.time()
-    log("Start game.")
-    TOTAL_GAME_ROUND = HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
+    Trainee = Agent()
+    Trainee.init_q_table_and_configs()
+    print(Trainee.HYPERPARAMETER_DICT)
+    Randomer = Foolish(Trainee.MOVEMENT_TABLE)
+    TOTAL_GAME_ROUND = Trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
-            if game_round % 25000 == 0:
-                test()
-            play_round()
-            if total_round >= TOTAL_GAME_ROUND:
+            if Trainee.game_round % 25000 == 0:
+                Agent.test(Trainee, Randomer)
+            Trainee.play_round()
+            if Trainee.total_round >= TOTAL_GAME_ROUND:
                 break
-        log("Finish all games.")
+        Agent.log("Finish all games.")
     except KeyboardInterrupt:
-        log("KeyboardInterrupt")
+        Agent.log("KeyboardInterrupt")
     else:
-        if path != "":
-            path += "_" + str(TOTAL_GAME_ROUND)
-        else:
-            path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
-        joblib.dump(Q_table, path, compress=4)
-        log(f"Saved Q_table in file {path}")
-        joblib.dump(HYPERPARAMETER_DICT, path.replace(".joblib", ".config.joblib"), compress=4)
-        log(f"Saved configs in file {path.replace('.joblib', '.config.joblib')}")
-        with open("training-records.txt", "a") as rf:
-            rf.write(f"{HYPERPARAMETER_DICT}: {test_data[1][-1]:.2%}, {get_time():.3f}s\n")
+        Trainee.save_q_table_and_configs()
     finally:
-        end_log()
-        plt.plot(test_data[0], test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        Agent.end_log()
+        plt.plot(Trainee.test_data[0], Trainee.test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Games", fontsize=12)
         plt.ylabel("Win Rate", fontsize=12)
@@ -284,5 +309,4 @@ if __name__ == "__main__":
         plt.ylim(0, 1)
         plt.tight_layout()
         plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
-        print(f"Finish all things after {get_time():.3f}s.")
         plt.show()
