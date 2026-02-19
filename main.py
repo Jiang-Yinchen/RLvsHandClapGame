@@ -5,6 +5,7 @@ import time
 from os import remove
 import joblib
 import matplotlib.pyplot as plt
+import sys
 
 
 class AbstractActor(ABC):
@@ -65,24 +66,18 @@ class Agent(AbstractActor):
         self.path = ""
 
     def init_q_table_and_configs(self):
-        self.path = input("Input path to load Q_table or press Enter to start a new training: ")
-        if self.path != "":
-            self.Q_table = joblib.load(self.path)
-            Agent.log(f"Load Q_table {hex(hash(str(self.Q_table)))}.")
-            self.HYPERPARAMETER_DICT = joblib.load(self.path.replace(".joblib", ".config.joblib"))
-        else:
+        args = sys.argv[1:]
+        if len(args) != 2:
+            Agent.log("Failed when loading arguments")
+            exit()
+        if args[0] == ".":
             self.init_q_table()
-            try:
-                self.HYPERPARAMETER_DICT = joblib.load("config.joblib")
-            except FileNotFoundError:
-                pass
-            while True:
-                s = input("Input hyperparameters or press Enter to start training: ")
-                if s == "":
-                    break
-                s = s.split("=")
-                self.HYPERPARAMETER_DICT[s[0]] = eval(s[1])
-            joblib.dump(self.HYPERPARAMETER_DICT, "config.joblib", compress=4)
+        else:
+            self.Q_table = joblib.load(args[0])
+        if args[1] == ".":
+            self.HYPERPARAMETER_DICT = eval(input("Input hyperparameters or press Enter to start training: "))
+        else:
+            self.HYPERPARAMETER_DICT = joblib.load(args[1])
 
     def save_q_table_and_configs(self):
         if self.path != "":
@@ -109,7 +104,6 @@ class Agent(AbstractActor):
     @staticmethod
     def end_log():  # 结束一轮日志，并写入文件
         # print(Agent.logs, end="")
-        print(open)
         with open("log.txt", "a", encoding="utf-8") as lf:
             lf.write(Agent.logs)
         Agent.logs = ""
