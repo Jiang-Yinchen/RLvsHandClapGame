@@ -11,7 +11,7 @@ import sys
 
 class AbstractActor(ABC):
     @abstractmethod
-    def choose_action(self, state):
+    def choose_action(self, state, use_random=True):
         pass
 
 
@@ -19,7 +19,7 @@ class Foolish(AbstractActor):
     def __init__(self, MOVEMENT_TABLE):
         self.MOVEMENT_TABLE = MOVEMENT_TABLE
 
-    def choose_action(self, state):
+    def choose_action(self, state, use_random=True):
         # 蓄水池抽样
         index = 1
         chosen = None
@@ -183,11 +183,11 @@ class Agent(AbstractActor):
         EPSILON_START, EPSILON_END, EPSILON_DECAY = self.HYPERPARAMETER_DICT["EPSILON_START"], self.HYPERPARAMETER_DICT["EPSILON_END"], self.HYPERPARAMETER_DICT["EPSILON_DECAY"]
         return EPSILON_END + (EPSILON_START - EPSILON_END) * exp(-1 * rounds * EPSILON_DECAY)
 
-    def choose_action(self, state):  # 选择动作
+    def choose_action(self, state, use_random=True):  # 选择动作
         movements = self.Q_table[state]
         max_reward = -inf
         action = None
-        if random.random() >= self.get_epsilon(self.total_round):
+        if random.random() >= self.get_epsilon(self.total_round) or not use_random:
             for i in movements.keys():
                 i_reward = movements[i]["reward"]
                 if i_reward >= max_reward:
@@ -264,7 +264,7 @@ class Agent(AbstractActor):
         for i in range(ROUND_PER_TEST):
             while True:
                 state_a, state_b = (0, 0), (0, 0)
-                action_a = Agent1.choose_action((state_a, state_b))  # 按照 Q 表选择动作
+                action_a = Agent1.choose_action((state_a, state_b), False)  # 按照 Q 表选择动作
                 action_b = Agent2.choose_action((state_b, state_a))
                 flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
                 if flag != 0:
