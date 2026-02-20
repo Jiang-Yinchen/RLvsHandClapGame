@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from math import exp, inf
 import random
 import time
+import json
 from os import remove
 import joblib
 import matplotlib.pyplot as plt
@@ -67,17 +68,26 @@ class Agent(AbstractActor):
 
     def init_q_table_and_configs(self):
         args = sys.argv[1:]
-        if len(args) != 2:
+        if len(args) > 2:
             Agent.log("Failed when loading arguments")
             exit()
-        if args[0] == ".":
+        elif len(args) == 0:
             self.init_q_table()
+            self.HYPERPARAMETER_DICT = json.loads(input("Input hyperparameters or press Enter to start training: "))
+        elif len(args) == 1:
+            self.init_q_table()
+            with open(args[0], "r") as f:
+                self.HYPERPARAMETER_DICT = json.load(f)
         else:
-            self.Q_table = joblib.load(args[0])
-        if args[1] == ".":
-            self.HYPERPARAMETER_DICT = eval(input("Input hyperparameters or press Enter to start training: "))
-        else:
-            self.HYPERPARAMETER_DICT = joblib.load(args[1])
+            if args[0] == ".":
+                self.init_q_table()
+            else:
+                self.Q_table = joblib.load(args[0])
+            if args[1] == ".":
+                self.HYPERPARAMETER_DICT = json.loads(input("Input hyperparameters or press Enter to start training: "))
+            else:
+                with open(args[0], "r") as f:
+                    self.HYPERPARAMETER_DICT = json.load(f)
 
     def save_q_table_and_configs(self):
         if self.path != "":
