@@ -195,6 +195,8 @@ class Agent(AbstractActor):
             now_reward_b += 5
             ended = -1
         else:
+            now_reward_a -= 0.5
+            now_reward_b -= 0.5
             if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
                 player_a_state = (player_a_state[0], 0)
             elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
