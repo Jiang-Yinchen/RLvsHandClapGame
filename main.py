@@ -206,8 +206,14 @@ class Agent(AbstractActor):
             player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
         return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
 
-    def play_round(self):  # 开始一轮游戏
+    def play_round(self, random_starts):  # 开始一轮游戏
         state_a, state_b = (0, 0), (0, 0)
+        if random_starts:
+            state_a1 = random.randint(0, 15)
+            state_a2 = random.randint(0, min(state_a1, 5))
+            state_b1 = random.randint(0, 15)
+            state_b2 = random.randint(0, min(state_b1, 5))
+            state_a, state_b = (state_a1, state_a2), (state_b1, state_b2)
         flag = 0
         round_cnt = 0
         while flag == 0:  # 循环直到结束一轮游戏
@@ -265,7 +271,7 @@ def main():
         while True:
             if trainee.game_round % 50000 == 0:
                 Agent.test(trainee, randomer)
-            trainee.play_round()
+            trainee.play_round(True)
             if trainee.total_round >= TOTAL_GAME_ROUND:
                 break
         print("Finish all games.")
