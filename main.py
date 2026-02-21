@@ -105,13 +105,13 @@ class Agent(AbstractActor):
             state0 = 0
         elif state[0] <= 1:
             state0 = 1
-        elif state[0] <= 3:
+        elif state[0] <= 2:
             state0 = 2
-        elif state[0] <= 5:
+        elif state[0] <= 4:
             state0 = 3
-        elif state[0] <= 7:
+        elif state[0] <= 6:
             state0 = 4
-        elif state[0] <= 10:
+        elif state[0] <= 9:
             state0 = 5
         elif state[0] <= 12:
             state0 = 6
@@ -121,10 +121,12 @@ class Agent(AbstractActor):
             state1 = 0
         elif state[1] <= 1:
             state1 = 1
-        elif state[1] <= 3:
+        elif state[1] <= 2:
             state1 = 2
-        else:
+        elif state[1] <= 4:
             state1 = 3
+        else:
+            state1 = 4
         return state0, state1
 
     def init_q_table(self):  # 初始化 Q 表
@@ -135,7 +137,7 @@ class Agent(AbstractActor):
         for i in range(16):  # 我的”生“数量
             for j in range(8):  # 对方的”生“数量（模糊后）
                 for k in range(6):  # 我的连续”生“数量
-                    for s in range(4):  # 对方的连续”生“数量（模糊后）
+                    for s in range(5):  # 对方的连续”生“数量（模糊后）
                         if i >= k and j >= s:
                             self.Q_table[((i, k), (j, s))] = {}
                             for t in self.MOVEMENT_TABLE.keys():
