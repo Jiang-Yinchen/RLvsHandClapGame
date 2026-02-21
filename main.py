@@ -93,7 +93,7 @@ class Agent(AbstractActor):
         if self.path != "":
             self.path += "_" + str(TOTAL_GAME_ROUND)
         else:
-            self.path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
+            self.path = f"model\\Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
         joblib.dump(self.Q_table, self.path, compress=4)
         print(f"Saved Q_table in file {self.path}")
         with open("training-records.txt", "a") as rf:
