@@ -31,6 +31,13 @@ class Foolish(AbstractActor):
         return chosen
 
 
+class Looper(AbstractActor):
+    def __init__(self, rule):
+        self.rule = rule
+    def choose_action(self, state, use_random=True):
+        return self.rule(state[0])
+
+
 class Agent(AbstractActor):
     logs = ""
     START_TIME = time.time()
@@ -124,7 +131,7 @@ class Agent(AbstractActor):
             state1 = 3
         else:
             state1 = 4
-        return state0, state1
+        return (state0, state1)
 
     def init_q_table(self):  # 初始化 Q 表
         print("Start initializing Q_table.")
@@ -238,19 +245,17 @@ class Agent(AbstractActor):
     @staticmethod
     def test(Agent1, Agent2):
         ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
-        print(f"Start test after {Agent1.game_round} games.")
         win_cnt = 0
         for i in range(ROUND_PER_TEST):
+            state_a, state_b = (0, 0), (0, 0)
             while True:
-                state_a, state_b = (0, 0), (0, 0)
-                action_a = Agent1.choose_action((state_a, state_b), False)  # 按照 Q 表选择动作
-                action_b = Agent2.choose_action((state_b, state_a), False)
+                action_a = Agent1.choose_action((state_a, Agent.blur(state_b)), False)  # 按照 Q 表选择动作
+                action_b = Agent2.choose_action((state_b, Agent.blur(state_a)), False)
                 flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
                 if flag != 0:
                     if flag == 1:
                         win_cnt += 1
                     break
-        print(f"Finish test after {Agent1.game_round} games.")
         print(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}.")
         Agent1.test_data[0].append(Agent1.game_round)
         Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
@@ -266,11 +271,15 @@ def main():
     trainee.init_q_table_and_configs(sys.argv[1:])
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
+    looper = Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生"))
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
             if trainee.game_round % 50000 == 0:
-                Agent.test(trainee, randomer)
+                # print("-" * 10 + "Trainee VS Randomer" + "-" * 10)
+                # Agent.test(trainee, randomer)
+                print("-" * 10 + "Trainee VS Looper" + "-" * 10)
+                Agent.test(trainee, looper)
             trainee.play_round(True)
             if trainee.total_round >= TOTAL_GAME_ROUND:
                 break
