@@ -265,15 +265,15 @@ class Agent(AbstractActor):
             while True:
                 state_a, state_b = (0, 0), (0, 0)
                 action_a = Agent1.choose_action((state_a, state_b), False)  # 按照 Q 表选择动作
-                action_b = Agent2.choose_action((state_b, state_a))
+                action_b = Agent2.choose_action((state_b, state_a), False)
                 flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
                 if flag != 0:
                     if flag == 1:
                         win_cnt += 1
                     break
         Agent.log(f"Finish test after {Agent1.game_round} games.")
-        Agent.log(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}.")
-        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.2%}")
+        Agent.log(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}.")
+        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}")
         Agent1.test_data[0].append(Agent1.game_round)
         Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
 
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     TOTAL_GAME_ROUND = Trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
-            if Trainee.game_round % 25000 == 0:
+            if Trainee.game_round % 50000 == 0:
                 Agent.test(Trainee, Randomer)
             Trainee.play_round()
             if Trainee.total_round >= TOTAL_GAME_ROUND:
