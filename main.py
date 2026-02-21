@@ -3,7 +3,6 @@ from math import exp, inf
 import random
 import time
 import json
-from os import remove
 import joblib
 import matplotlib.pyplot as plt
 import sys
@@ -39,7 +38,6 @@ class Looper(AbstractActor):
 
 
 class Agent(AbstractActor):
-    logs = ""
     START_TIME = time.time()
 
     def __init__(self):
@@ -92,7 +90,7 @@ class Agent(AbstractActor):
             if args[1] == ".":
                 self.HYPERPARAMETER_DICT = json.loads(input("Input hyperparameters or press Enter to start training: "))
             else:
-                with open(args[0], "r") as f:
+                with open(args[1], "r") as f:
                     self.HYPERPARAMETER_DICT = json.load(f)
 
     def save_q_table_and_configs(self):
@@ -263,15 +261,11 @@ class Agent(AbstractActor):
 
 def main():
     random.seed(42)
-    try:
-        remove("log.txt")
-    except FileNotFoundError:
-        pass
     trainee = Agent()
     trainee.init_q_table_and_configs(sys.argv[1:])
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
-    looper = Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生"))
+    looper = Looper(lambda s: ("一" if s[1] > 0 else ("单" if s[0] > 0 else "生")) if random.randint(0, 10) != 0 else "生")
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
