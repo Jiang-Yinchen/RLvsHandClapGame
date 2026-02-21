@@ -69,7 +69,7 @@ class Agent(AbstractActor):
     def init_q_table_and_configs(self):
         args = sys.argv[1:]
         if len(args) > 2:
-            Agent.log("Failed when loading arguments")
+            print("Failed when loading arguments")
             exit()
         elif len(args) == 0:
             self.init_q_table()
@@ -95,28 +95,9 @@ class Agent(AbstractActor):
         else:
             self.path = f"Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
         joblib.dump(self.Q_table, self.path, compress=4)
-        Agent.log(f"Saved Q_table in file {self.path}")
-        joblib.dump(self.HYPERPARAMETER_DICT, self.path.replace(".joblib", ".config.joblib"), compress=4)
-        Agent.log(f"Saved configs in file {self.path.replace('.joblib', '.config.joblib')}")
+        print(f"Saved Q_table in file {self.path}")
         with open("training-records.txt", "a") as rf:
-            rf.write(f"{self.HYPERPARAMETER_DICT}: {self.test_data[1][-1]:.2%}, {Agent.get_time():.3f}s\n")
-
-    @staticmethod
-    def get_time():  # 获取运行时间
-        return time.time() - Agent.START_TIME
-
-    @staticmethod
-    def log(message):  # 记录日志
-        Agent.logs += f"{Agent.get_time():.3f}: {message}\n"
-        if len(Agent.logs) > 1000000:
-            Agent.end_log()
-
-    @staticmethod
-    def end_log():  # 结束一轮日志，并写入文件
-        # print(Agent.logs, end="")
-        with open("log.txt", "a", encoding="utf-8") as lf:
-            lf.write(Agent.logs)
-        Agent.logs = ""
+            rf.write(f"{self.HYPERPARAMETER_DICT}: {self.test_data[1][-1]:.3%}\n")
 
     @staticmethod
     def blur(state):
@@ -147,7 +128,7 @@ class Agent(AbstractActor):
         return state0, state1
 
     def init_q_table(self):  # 初始化 Q 表
-        self.log("Start initializing Q_table.")
+        print("Start initializing Q_table.")
         cnt_movement = 0
         cnt_state = 0
         # 使用循环变量来纪念 Dijkstra
@@ -162,7 +143,7 @@ class Agent(AbstractActor):
                                     self.Q_table[((i, k), (j, s))].update({t: {"reward": 0, "episode": 0}})
                                     cnt_movement += 1
                             cnt_state += 1
-        self.log(f"Q_table {hex(hash(str(self.Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
+        print(f"Q_table {hex(hash(str(self.Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
 
     def get_alpha(self, episode):  # 获取学习率
         ALPHA_0, ALPHA_MIN, DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["DECAY_EPISODES"]
@@ -231,7 +212,6 @@ class Agent(AbstractActor):
         flag = 0
         round_cnt = 0
         while flag == 0:  # 循环直到结束一轮游戏
-            # log(f"Start game {game_round} round {round_cnt}.")
             old_state_a, old_state_b = state_a, state_b
 
             action_for_a, action_for_b = self.choose_action((state_a, Agent.blur(state_b))), self.choose_action((state_b, Agent.blur(state_a)))
@@ -239,27 +219,21 @@ class Agent(AbstractActor):
 
             if flag == 0:
                 pass
-                # log(f"In game {game_round}, Player A uses {player_a_action} and Player B uses {player_b_action}!")
             elif flag == 1:
                 pass
-                # log(f"In game {game_round}, Player A uses {action_for_a} kills {action_for_b}!")
             elif flag == -1:
                 pass
-                # log(f"In game {game_round}, Player B uses {action_for_b} kills {action_for_a}!")
 
-            # log(f"Now state is {state_a} and {state_b} in game {game_round}.")
             self.update_q_table((old_state_a, Agent.blur(old_state_b)), (state_a, Agent.blur(state_b)), action_for_a, now_reward_a)
             self.update_q_table((old_state_b, Agent.blur(old_state_a)), (state_b, Agent.blur(state_a)), action_for_b, now_reward_b)
             round_cnt += 1
-        # log(f"Finish game {game_round} after {round_cnt} round(s).")
         self.total_round += round_cnt
-        # log(f"Total round: {total_round}.")
         self.game_round += 1
 
     @staticmethod
     def test(Agent1, Agent2):
         ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
-        Agent.log(f"Start test after {Agent1.game_round} games.")
+        print(f"Start test after {Agent1.game_round} games.")
         win_cnt = 0
         for i in range(ROUND_PER_TEST):
             while True:
@@ -271,14 +245,12 @@ class Agent(AbstractActor):
                     if flag == 1:
                         win_cnt += 1
                     break
-        Agent.log(f"Finish test after {Agent1.game_round} games.")
-        Agent.log(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}.")
-        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}")
+        print(f"Finish test after {Agent1.game_round} games.")
+        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}.")
         Agent1.test_data[0].append(Agent1.game_round)
         Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
-START_TIME = -inf
 if __name__ == "__main__":
     random.seed(42)
     try:
@@ -297,13 +269,13 @@ if __name__ == "__main__":
             Trainee.play_round()
             if Trainee.total_round >= TOTAL_GAME_ROUND:
                 break
-        Agent.log("Finish all games.")
+        print("Finish all games.")
     except KeyboardInterrupt:
-        Agent.log("KeyboardInterrupt")
+        print("KeyboardInterrupt")
+        exit()
     else:
         Trainee.save_q_table_and_configs()
     finally:
-        Agent.end_log()
         plt.plot(Trainee.test_data[0], Trainee.test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Games", fontsize=12)
