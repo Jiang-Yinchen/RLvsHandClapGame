@@ -66,8 +66,7 @@ class Agent(AbstractActor):
         self.test_data = [[], []]
         self.path = ""
 
-    def init_q_table_and_configs(self):
-        args = sys.argv[1:]
+    def init_q_table_and_configs(self, args):
         if len(args) > 2:
             print("Failed when loading arguments")
             exit()
@@ -90,10 +89,8 @@ class Agent(AbstractActor):
                     self.HYPERPARAMETER_DICT = json.load(f)
 
     def save_q_table_and_configs(self):
-        if self.path != "":
-            self.path += "_" + str(TOTAL_GAME_ROUND)
-        else:
-            self.path = f"model\\Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}_{TOTAL_GAME_ROUND}.joblib"
+        if self.path == "":
+            self.path = f"model\\Q_table_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.joblib"
         joblib.dump(self.Q_table, self.path, compress=4)
         print(f"Saved Q_table in file {self.path}")
         with open("training-records.txt", "a") as rf:
@@ -253,32 +250,32 @@ class Agent(AbstractActor):
         Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
 
 
-if __name__ == "__main__":
+def main():
     random.seed(42)
     try:
         remove("log.txt")
     except FileNotFoundError:
         pass
-    Trainee = Agent()
-    Trainee.init_q_table_and_configs()
-    print(Trainee.HYPERPARAMETER_DICT)
-    Randomer = Foolish(Trainee.MOVEMENT_TABLE)
-    TOTAL_GAME_ROUND = Trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
+    trainee = Agent()
+    trainee.init_q_table_and_configs(sys.argv[1:])
+    print(trainee.HYPERPARAMETER_DICT)
+    randomer = Foolish(trainee.MOVEMENT_TABLE)
+    TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
-            if Trainee.game_round % 50000 == 0:
-                Agent.test(Trainee, Randomer)
-            Trainee.play_round()
-            if Trainee.total_round >= TOTAL_GAME_ROUND:
+            if trainee.game_round % 50000 == 0:
+                Agent.test(trainee, randomer)
+            trainee.play_round()
+            if trainee.total_round >= TOTAL_GAME_ROUND:
                 break
         print("Finish all games.")
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
         exit()
     else:
-        Trainee.save_q_table_and_configs()
+        trainee.save_q_table_and_configs()
     finally:
-        plt.plot(Trainee.test_data[0], Trainee.test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        plt.plot(trainee.test_data[0], trainee.test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Games", fontsize=12)
         plt.ylabel("Win Rate", fontsize=12)
@@ -286,5 +283,8 @@ if __name__ == "__main__":
         plt.grid(True, alpha=0.3)
         plt.ylim(0, 1)
         plt.tight_layout()
-        plt.savefig(f"win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
+        plt.savefig(f"winrate\\win_rate_{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}.png", dpi=300)
         plt.show()
+
+if __name__ == "__main__":
+    main()
