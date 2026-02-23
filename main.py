@@ -68,7 +68,7 @@ class Agent(AbstractActor):
         self.Q_table = {}
         self.game_round = 0  # 总游戏数
         self.total_round = 0  # 总回合数
-        self.test_data = [[], []]
+        self.test_data = []
         self.path = ""
 
     def init_q_table_and_configs(self, args):
@@ -255,8 +255,7 @@ class Agent(AbstractActor):
                     win = True
                 break
         print(f"Win: {win}")
-        Agent1.test_data[0].append(Agent1.game_round)
-        Agent1.test_data[1].append(int(win))
+        Agent1.test_data.append(int(win))
 
 
 def main():
@@ -284,9 +283,11 @@ def main():
     else:
         trainee.save_q_table_and_configs()
     finally:
-        plt.plot(trainee.test_data[0], trainee.test_data[1], color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        smoothness = 5
+        smooth_data = [sum([trainee.test_data[i + j] for j in range(smoothness)]) / smoothness for i in range(len(trainee.test_data) - smoothness)]
+        plt.plot(list(range(len(trainee.test_data) - smoothness)), smooth_data, color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
-        plt.xlabel("Games", fontsize=12)
+        plt.xlabel("Time", fontsize=12)
         plt.ylabel("Win Rate", fontsize=12)
         plt.legend(loc="upper left")
         plt.grid(True, alpha=0.3)
