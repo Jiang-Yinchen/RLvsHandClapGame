@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from math import exp, inf
+from math import exp
 import random
 import time
 import json
@@ -130,7 +130,7 @@ class Agent(AbstractActor):
             state1 = 3
         else:
             state1 = 4
-        return (state0, state1)
+        return state0, state1
 
     def init_q_table(self):  # 初始化 Q 表
         print("Start initializing Q_table.")
@@ -151,7 +151,7 @@ class Agent(AbstractActor):
         print(f"Q_table {hex(hash(str(self.Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
 
     def get_alpha(self, episode):  # 获取学习率
-        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["DECAY_EPISODES"]
+        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["ALPHA_DECAY_EPISODES"]
         if episode < DECAY_EPISODES:
             return ALPHA_0 - (ALPHA_0 - ALPHA_MIN) * episode / DECAY_EPISODES
         return ALPHA_MIN
@@ -163,41 +163,42 @@ class Agent(AbstractActor):
         new_episode_max_reward = max([self.Q_table[new_state][i]["reward"] for i in self.Q_table[new_state].keys()])  # 新一轮的最大奖励
         old = self.Q_table[old_state][action]["reward"]
         self.Q_table[old_state][action]["reward"] = old + self.get_alpha(self.Q_table[old_state][action]["episode"]) * (reward + GAMMA * new_episode_max_reward - old)  # 更新 Q 表
-        self.Q_table[old_state][action]["reward"] = max(min(self.Q_table[old_state][action]["reward"], 10), -10)  # 限制奖励范围
+        self.Q_table[old_state][action]["reward"] = max(min(self.Q_table[old_state][action]["reward"], 2), -2)  # 限制奖励范围
 
-    def get_epsilon(self, rounds):  # 获取探索率
-        EPSILON_START, EPSILON_END, EPSILON_DECAY = self.HYPERPARAMETER_DICT["EPSILON_START"], self.HYPERPARAMETER_DICT["EPSILON_END"], self.HYPERPARAMETER_DICT["EPSILON_DECAY"]
-        return EPSILON_END + (EPSILON_START - EPSILON_END) * exp(-1 * rounds * EPSILON_DECAY)
+    def get_temperature(self, rounds):  # 获取温度
+        TEMPERATURE_0, TEMPERATURE_MIN, TEMPERATURE_DECAY_ROUNDS = self.HYPERPARAMETER_DICT["TEMPERATURE_0"], self.HYPERPARAMETER_DICT["TEMPERATURE_MIN"], self.HYPERPARAMETER_DICT["TEMPERATURE_DECAY_ROUNDS"]
+        if rounds < TEMPERATURE_DECAY_ROUNDS:
+            return TEMPERATURE_0 - (TEMPERATURE_0 - TEMPERATURE_MIN) * rounds / TEMPERATURE_DECAY_ROUNDS
+        return TEMPERATURE_MIN
 
     def choose_action(self, state, use_random=True):  # 选择动作
         movements = self.Q_table[state]
-        max_reward = -inf
-        action = None
-        if random.random() >= self.get_epsilon(self.total_round) or not use_random:
-            for i in movements.keys():
-                i_reward = movements[i]["reward"]
-                if i_reward >= max_reward:
-                    max_reward = i_reward
-                    action = i
-        else:
-            action = random.choice(list(movements.keys()))
-        return action
+        weight = [(i, exp(movements[i]["reward"] / self.get_temperature(self.game_round))) for i in movements.keys()]
+        weighted_range = [0.0]
+        for i in range(len(movements)):
+            weighted_range.append(weighted_range[-1] + weight[i][1])
+        weighted_range = weighted_range[1:]
+        rand = random.uniform(0, weighted_range[-1])
+        for i in range(len(weighted_range)):
+            if rand <= weighted_range[i]:
+                return weight[i][0]
+        return weight[-1][0]
 
     @staticmethod
     def judge(player_a_state, player_b_state, player_a_action, player_b_action, MOVEMENT_TABLE):
         now_reward_a, now_reward_b = 0, 0
         ended = 0
         if player_b_action in MOVEMENT_TABLE[player_a_action]["kill"]:
-            now_reward_a += 5
-            now_reward_b -= 5
+            now_reward_a += 1
+            now_reward_b -= 1
             ended = 1
         elif player_a_action in MOVEMENT_TABLE[player_b_action]["kill"]:
-            now_reward_a -= 5
-            now_reward_b += 5
+            now_reward_a -= 1
+            now_reward_b += 1
             ended = -1
         else:
-            now_reward_a -= 0.5
-            now_reward_b -= 0.5
+            now_reward_a -= 0.1
+            now_reward_b -= 0.1
             if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
                 player_a_state = (player_a_state[0], 0)
             elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
