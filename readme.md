@@ -74,17 +74,7 @@ MOVEMENT_TABLE = {
 超参数使用 JSON 格式。示例如下：
 
 ```json
-{
-  "ALPHA_0": 0.2,
-  "ALPHA_MIN": 0.02,
-  "DECAY_EPISODES": 10,
-  "EPSILON_DECAY": 5e-07,
-  "EPSILON_END": 0.01,
-  "EPSILON_START": 0.2,
-  "GAMMA": 0.9,
-  "ROUND_PER_TEST": 20000,
-  "TOTAL_EPISODES": 15,
-  "TOTAL_GAME_ROUND": 5000000}
+{"ALPHA_0": 0.2, "ALPHA_MIN": 0.02, "DECAY_EPISODES": 10, "EPSILON_DECAY": 5e-07, "EPSILON_END": 0.01, "EPSILON_START": 0.2, "GAMMA": 0.9, "TOTAL_GAME_ROUND": 5000000, "SMOOTHNESS": 20}
 ```
 
 它们的意义如下：
@@ -98,8 +88,8 @@ MOVEMENT_TABLE = {
 | `EPSILON_END`      | 探索率下限                      |
 | `EPSILON_START`    | 初始探索率                      |
 | `GAMMA`            | $\gamma$ 值，用来权衡当前奖励和未来长期奖励 |
-| `ROUND_PER_TEST`   | 每次测试的轮数                    |
 | `TOTAL_GAME_ROUND` | 训练总轮数                      |
+| `SMOOTHNESS`       | 生成图表时模糊窗口的大小               |
 
 ---
 

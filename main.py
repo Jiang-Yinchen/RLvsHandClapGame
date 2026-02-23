@@ -284,9 +284,9 @@ def main():
     else:
         trainee.save_q_table_and_configs()
     finally:
-        smoothness = 5
-        smooth_data = [statistics.mean(trainee.test_data[i : i+smoothness]) for i in range(len(trainee.test_data) - smoothness)]
-        plt.plot(list(range(len(trainee.test_data) - smoothness)), smooth_data, color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        SMOOTHNESS = trainee.HYPERPARAMETER_DICT["SMOOTHNESS"]
+        smooth_data = [statistics.mean(trainee.test_data[i : i + SMOOTHNESS]) for i in range(len(trainee.test_data) - SMOOTHNESS)]
+        plt.plot(list(range(len(trainee.test_data) - SMOOTHNESS)), smooth_data, color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Time", fontsize=12)
         plt.ylabel("Win Rate", fontsize=12)
