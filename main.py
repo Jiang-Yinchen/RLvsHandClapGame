@@ -6,6 +6,7 @@ import json
 import joblib
 import matplotlib.pyplot as plt
 import sys
+import statistics
 
 
 class AbstractActor(ABC):
@@ -99,7 +100,7 @@ class Agent(AbstractActor):
         joblib.dump(self.Q_table, self.path, compress=4)
         print(f"Saved Q_table in file {self.path}")
         with open("training-records.txt", "a") as rf:
-            rf.write(f"{self.HYPERPARAMETER_DICT}: {self.test_data[1][-1]:.3%}\n")
+            rf.write(f"{self.HYPERPARAMETER_DICT}: {statistics.mean(self.test_data):.3%}\n")
 
     @staticmethod
     def blur(state):
@@ -268,7 +269,7 @@ def main():
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
-            if trainee.game_round % 500 == 0:
+            if trainee.game_round % 5000 == 0:
                 # print("-" * 10 + "Trainee VS Randomer" + "-" * 10)
                 # Agent.test(trainee, randomer)
                 print("-" * 10 + "Trainee VS Looper" + "-" * 10)
@@ -284,7 +285,7 @@ def main():
         trainee.save_q_table_and_configs()
     finally:
         smoothness = 5
-        smooth_data = [sum([trainee.test_data[i + j] for j in range(smoothness)]) / smoothness for i in range(len(trainee.test_data) - smoothness)]
+        smooth_data = [statistics.mean(trainee.test_data[i : i+smoothness]) for i in range(len(trainee.test_data) - smoothness)]
         plt.plot(list(range(len(trainee.test_data) - smoothness)), smooth_data, color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Time", fontsize=12)
