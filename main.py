@@ -244,21 +244,19 @@ class Agent(AbstractActor):
 
     @staticmethod
     def test(Agent1, Agent2):
-        ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
-        win_cnt = 0
-        for i in range(ROUND_PER_TEST):
-            state_a, state_b = (0, 0), (0, 0)
-            while True:
-                action_a = Agent1.choose_action((state_a, Agent.blur(state_b)), False)  # 按照 Q 表选择动作
-                action_b = Agent2.choose_action((state_b, Agent.blur(state_a)), False)
-                flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
-                if flag != 0:
-                    if flag == 1:
-                        win_cnt += 1
-                    break
-        print(f"Win rate: {win_cnt / ROUND_PER_TEST:.3%}.")
+        win = False
+        state_a, state_b = (0, 0), (0, 0)
+        for _ in range(100):  # 如果回合数大于 100 就直接判定为输
+            action_a = Agent1.choose_action((state_a, Agent.blur(state_b)), False)  # 按照 Q 表选择动作
+            action_b = Agent2.choose_action((state_b, Agent.blur(state_a)), False)
+            flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
+            if flag != 0:
+                if flag == 1:
+                    win = True
+                break
+        print(f"Win: {win}")
         Agent1.test_data[0].append(Agent1.game_round)
-        Agent1.test_data[1].append(win_cnt / ROUND_PER_TEST)
+        Agent1.test_data[1].append(int(win))
 
 
 def main():
@@ -267,11 +265,11 @@ def main():
     trainee.init_q_table_and_configs(sys.argv[1:])
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
-    looper = Looper(lambda s: ("一" if s[1] > 0 else ("单" if s[0] > 0 else "生")) if random.randint(0, 10) != 0 else "生")
+    looper = Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生"))
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     try:
         while True:
-            if trainee.game_round % 50000 == 0:
+            if trainee.game_round % 500 == 0:
                 # print("-" * 10 + "Trainee VS Randomer" + "-" * 10)
                 # Agent.test(trainee, randomer)
                 print("-" * 10 + "Trainee VS Looper" + "-" * 10)
