@@ -151,9 +151,11 @@ class Agent(AbstractActor):
         print(f"Q_table {hex(hash(str(self.Q_table)))} has been initialized with {cnt_state} state(s) and {cnt_movement} movement(s).")
 
     def get_alpha(self, episode):  # 获取学习率
-        ALPHA_0, ALPHA_MIN, DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["ALPHA_DECAY_EPISODES"]
-        if episode < DECAY_EPISODES:
-            return ALPHA_0 - (ALPHA_0 - ALPHA_MIN) * episode / DECAY_EPISODES
+        ALPHA_0, ALPHA_MIDDLE, ALPHA_MIN, ALPHA_FIRST_DECAY_EPISODES, ALPHA_SECOND_DECAY_EPISODES = self.HYPERPARAMETER_DICT["ALPHA_0"], self.HYPERPARAMETER_DICT["ALPHA_MIDDLE"], self.HYPERPARAMETER_DICT["ALPHA_MIN"], self.HYPERPARAMETER_DICT["ALPHA_FIRST_DECAY_EPISODES"], self.HYPERPARAMETER_DICT["ALPHA_SECOND_DECAY_EPISODES"]
+        if episode < ALPHA_FIRST_DECAY_EPISODES:
+            return ALPHA_0 - (ALPHA_0 - ALPHA_MIDDLE) * episode / ALPHA_FIRST_DECAY_EPISODES
+        elif episode < ALPHA_FIRST_DECAY_EPISODES + ALPHA_SECOND_DECAY_EPISODES:
+            return ALPHA_MIDDLE - (ALPHA_MIDDLE - ALPHA_MIN) * (episode - ALPHA_FIRST_DECAY_EPISODES) / ALPHA_SECOND_DECAY_EPISODES
         return ALPHA_MIN
 
     def update_q_table(self, old_state, new_state, action, reward):  # 更新 Q 表
@@ -163,7 +165,7 @@ class Agent(AbstractActor):
         new_episode_max_reward = max([self.Q_table[new_state][i]["reward"] for i in self.Q_table[new_state].keys()])  # 新一轮的最大奖励
         old = self.Q_table[old_state][action]["reward"]
         self.Q_table[old_state][action]["reward"] = old + self.get_alpha(self.Q_table[old_state][action]["episode"]) * (reward + GAMMA * new_episode_max_reward - old)  # 更新 Q 表
-        self.Q_table[old_state][action]["reward"] = max(min(self.Q_table[old_state][action]["reward"], 2), -2)  # 限制奖励范围
+        self.Q_table[old_state][action]["reward"] = max(min(self.Q_table[old_state][action]["reward"], 15), -15)  # 限制奖励范围
 
     def get_temperature(self, rounds):  # 获取温度
         TEMPERATURE_0, TEMPERATURE_MIN, TEMPERATURE_DECAY_ROUNDS = self.HYPERPARAMETER_DICT["TEMPERATURE_0"], self.HYPERPARAMETER_DICT["TEMPERATURE_MIN"], self.HYPERPARAMETER_DICT["TEMPERATURE_DECAY_ROUNDS"]
@@ -172,8 +174,12 @@ class Agent(AbstractActor):
         return TEMPERATURE_MIN
 
     def choose_action(self, state, use_random=True):  # 选择动作
+        if use_random:
+            t = self.get_temperature(self.game_round)
+        else:
+            t = self.HYPERPARAMETER_DICT["TEMPERATURE_MIN"]
         movements = self.Q_table[state]
-        weight = [(i, exp(movements[i]["reward"] / self.get_temperature(self.game_round))) for i in movements.keys()]
+        weight = [(i, exp(movements[i]["reward"] / t)) for i in movements.keys()]
         weighted_range = [0.0]
         for i in range(len(movements)):
             weighted_range.append(weighted_range[-1] + weight[i][1])
@@ -189,16 +195,16 @@ class Agent(AbstractActor):
         now_reward_a, now_reward_b = 0, 0
         ended = 0
         if player_b_action in MOVEMENT_TABLE[player_a_action]["kill"]:
-            now_reward_a += 1
-            now_reward_b -= 1
+            now_reward_a += 5
+            now_reward_b -= 5
             ended = 1
         elif player_a_action in MOVEMENT_TABLE[player_b_action]["kill"]:
-            now_reward_a -= 1
-            now_reward_b += 1
+            now_reward_a -= 5
+            now_reward_b += 5
             ended = -1
         else:
-            now_reward_a -= 0.1
-            now_reward_b -= 0.1
+            now_reward_a -= 0.5
+            now_reward_b -= 0.5
             if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
                 player_a_state = (player_a_state[0], 0)
             elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
@@ -239,25 +245,27 @@ class Agent(AbstractActor):
                 pass
 
             self.update_q_table((old_state_a, Agent.blur(old_state_b)), (state_a, Agent.blur(state_b)), action_for_a, now_reward_a)
-            self.update_q_table((old_state_b, Agent.blur(old_state_a)), (state_b, Agent.blur(state_a)), action_for_b, now_reward_b)
+            # self.update_q_table((old_state_b, Agent.blur(old_state_a)), (state_b, Agent.blur(state_a)), action_for_b, now_reward_b)
             round_cnt += 1
         self.total_round += round_cnt
         self.game_round += 1
 
     @staticmethod
     def test(Agent1, Agent2):
-        win = False
-        state_a, state_b = (0, 0), (0, 0)
-        for _ in range(100):  # 如果回合数大于 100 就直接判定为输
-            action_a = Agent1.choose_action((state_a, Agent.blur(state_b)), False)  # 按照 Q 表选择动作
-            action_b = Agent2.choose_action((state_b, Agent.blur(state_a)), False)
-            flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
-            if flag != 0:
-                if flag == 1:
-                    win = True
-                break
-        print(f"Win: {win}")
-        Agent1.test_data.append(int(win))
+        ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
+        win_cnt = 0
+        for i in range(ROUND_PER_TEST):
+            state_a, state_b = (0, 0), (0, 0)
+            for _ in range(100):  # 如果回合数大于 100 就直接判定为输
+                action_a = Agent1.choose_action((state_a, Agent.blur(state_b)), False)  # 按照 Q 表选择动作
+                action_b = Agent2.choose_action((state_b, Agent.blur(state_a)), False)
+                flag, state_a, state_b, _, _ = Agent.judge(state_a, state_b, action_a, action_b, Agent1.MOVEMENT_TABLE)
+                if flag != 0:
+                    if flag == 1:
+                        win_cnt += 1
+                    break
+        print(f"Win: {win_cnt / ROUND_PER_TEST:.2%}")
+        Agent1.test_data.append(win_cnt / ROUND_PER_TEST)
 
 
 def main():
