@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from math import exp
 import random
 import time
@@ -7,6 +8,7 @@ import joblib
 import matplotlib.pyplot as plt
 import sys
 import statistics
+from tqdm import tqdm
 
 
 class AbstractActor(ABC):
@@ -65,7 +67,6 @@ class Agent(AbstractActor):
             "地": {"kill": {"生", "一", "二", "三", "四", "五"}, "need": 3, "combo": 0},
             "机": {"kill": {"生", "防", "飞", "单", "双", "刺", "肥", "镖", "一", "二", "三", "四", "五", "胡", "菜", "厨", "地"}, "need": 10, "combo": 0}
         }
-        self.START_TIME = time.time()
         self.Q_table = {}
         self.game_round = 0  # 总游戏数
         self.total_round = 0  # 总回合数
@@ -100,7 +101,7 @@ class Agent(AbstractActor):
         joblib.dump(self.Q_table, self.path, compress=4)
         print(f"Saved Q_table in file {self.path}")
         with open("training-records.txt", "a") as rf:
-            rf.write(f"{self.HYPERPARAMETER_DICT}: {statistics.mean(self.test_data):.3%}\n")
+            rf.write(f"{time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())}{self.HYPERPARAMETER_DICT}: {statistics.mean(self.test_data):.3%}\n")
 
     @staticmethod
     def blur(state):
@@ -177,7 +178,7 @@ class Agent(AbstractActor):
         if use_random:
             t = self.get_temperature(self.game_round)
         else:
-            t = self.HYPERPARAMETER_DICT["TEMPERATURE_MIN"]
+            t = self.HYPERPARAMETER_DICT["TEMPERATURE_TEST"]
         movements = self.Q_table[state]
         weight = [(i, exp(movements[i]["reward"] / t)) for i in movements.keys()]
         weighted_range = [0.0]
@@ -203,8 +204,8 @@ class Agent(AbstractActor):
             now_reward_b += 5
             ended = -1
         else:
-            now_reward_a -= 0.5
-            now_reward_b -= 0.5
+            now_reward_a -= 0.2
+            now_reward_b -= 0.2
             if MOVEMENT_TABLE[player_a_action]["combo"] != 0:
                 player_a_state = (player_a_state[0], 0)
             elif MOVEMENT_TABLE[player_a_action]["need"] > 0:
@@ -221,7 +222,7 @@ class Agent(AbstractActor):
             player_b_state = (min(player_b_state[0] - MOVEMENT_TABLE[player_b_action]["need"], 15), player_b_state[1])
         return ended, player_a_state, player_b_state, now_reward_a, now_reward_b
 
-    def play_round(self, random_starts):  # 开始一轮游戏
+    def play_round(self, random_starts, opponent):  # 开始一轮游戏
         state_a, state_b = (0, 0), (0, 0)
         if random_starts:
             state_a1 = random.randint(0, 15)
@@ -231,10 +232,10 @@ class Agent(AbstractActor):
             state_a, state_b = (state_a1, state_a2), (state_b1, state_b2)
         flag = 0
         round_cnt = 0
-        while flag == 0:  # 循环直到结束一轮游戏
+        while flag == 0 and round_cnt < 100:  # 循环直到结束一轮游戏
             old_state_a, old_state_b = state_a, state_b
 
-            action_for_a, action_for_b = self.choose_action((state_a, Agent.blur(state_b))), self.choose_action((state_b, Agent.blur(state_a)))
+            action_for_a, action_for_b = self.choose_action((state_a, Agent.blur(state_b))), opponent.choose_action((state_b, Agent.blur(state_a)))
             flag, state_a, state_b, now_reward_a, now_reward_b = self.judge(state_a, state_b, action_for_a, action_for_b, self.MOVEMENT_TABLE)
 
             if flag == 0:
@@ -254,6 +255,7 @@ class Agent(AbstractActor):
     def test(Agent1, Agent2):
         ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
         win_cnt = 0
+        # print("Win: ", end="")
         for i in range(ROUND_PER_TEST):
             state_a, state_b = (0, 0), (0, 0)
             for _ in range(100):  # 如果回合数大于 100 就直接判定为输
@@ -264,8 +266,9 @@ class Agent(AbstractActor):
                     if flag == 1:
                         win_cnt += 1
                     break
-        print(f"Win: {win_cnt / ROUND_PER_TEST:.2%}")
-        Agent1.test_data.append(win_cnt / ROUND_PER_TEST)
+        win_rate = win_cnt / ROUND_PER_TEST
+        # print(f"{win_rate:.2%}" + "*" * int(win_rate * 50) + " " * int(50 - win_rate * 50) + "|")
+        Agent1.test_data.append(win_rate)
 
 
 def main():
@@ -274,18 +277,21 @@ def main():
     trainee.init_q_table_and_configs(sys.argv[1:])
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
-    looper = Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生"))
+    looper = Looper(lambda s: ("一" if s[1] > 0 else ("单" if s[0] > 0 else "生")) if random.random() < 0.9 else "生")
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
+    history = []
     try:
-        while True:
+        for _ in tqdm(range(TOTAL_GAME_ROUND)):
             if trainee.game_round % 5000 == 0:
-                # print("-" * 10 + "Trainee VS Randomer" + "-" * 10)
-                # Agent.test(trainee, randomer)
-                print("-" * 10 + "Trainee VS Looper" + "-" * 10)
-                Agent.test(trainee, looper)
-            trainee.play_round(True)
-            if trainee.total_round >= TOTAL_GAME_ROUND:
-                break
+                if trainee.game_round % 50000 == 0:
+                    history.append(deepcopy(trainee))
+                    if len(history) > 10:
+                        history.pop(0)
+                Agent.test(trainee, history[0])
+            if len(history) == 0 or random.random() < 0.6:
+                trainee.play_round(True, trainee)
+            else:
+                trainee.play_round(True, random.choice(history))
         print("Finish all games.")
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
