@@ -277,7 +277,10 @@ def main():
     trainee.init_q_table_and_configs(sys.argv[1:])
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
-    looper = Looper(lambda s: ("一" if s[1] > 0 else ("单" if s[0] > 0 else "生")) if random.random() < 0.9 else "生")
+    loopers = [
+        Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生")),
+        Looper(lambda s: "一" if s[1] > 0 else ("双" if s[0] > 1 else "生"))
+    ]
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     history = []
     try:
@@ -285,13 +288,19 @@ def main():
             if trainee.game_round % 5000 == 0:
                 if trainee.game_round % 50000 == 0:
                     history.append(deepcopy(trainee))
-                    if len(history) > 10:
-                        history.pop(0)
-                Agent.test(trainee, history[0])
-            if len(history) == 0 or random.random() < 0.6:
-                trainee.play_round(True, trainee)
+                    if len(history) > 20:
+                        history.pop(random.randint(0, len(history) - 1))
+                Agent.test(trainee, randomer)
+            r = random.random()
+            random_starts = random.random() < 0.6
+            if len(history) == 0 or r < 0.4:
+                trainee.play_round(random_starts, trainee)
+            elif r < 0.9:
+                trainee.play_round(random_starts, random.choice(history))
+            elif r < 0.95:
+                trainee.play_round(random_starts, random.choice(loopers))
             else:
-                trainee.play_round(True, random.choice(history))
+                trainee.play_round(random_starts, randomer)
         print("Finish all games.")
     except KeyboardInterrupt:
         print("KeyboardInterrupt")

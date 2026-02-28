@@ -2,3 +2,4 @@ training-records.txt
 model/
 .idea/
 winrate/
+*.test.py
