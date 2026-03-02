@@ -70,7 +70,7 @@ class Agent(AbstractActor):
         self.Q_table = {}
         self.game_round = 0  # 总游戏数
         self.total_round = 0  # 总回合数
-        self.test_data = []
+        self.test_data = {}
         self.path = ""
 
     def init_q_table_and_configs(self, args):
@@ -252,7 +252,7 @@ class Agent(AbstractActor):
         self.game_round += 1
 
     @staticmethod
-    def test(Agent1, Agent2):
+    def test(Agent1, Agent2, tag):
         ROUND_PER_TEST = Agent1.HYPERPARAMETER_DICT["ROUND_PER_TEST"]
         win_cnt = 0
         # print("Win: ", end="")
@@ -268,7 +268,9 @@ class Agent(AbstractActor):
                     break
         win_rate = win_cnt / ROUND_PER_TEST
         # print(f"{win_rate:.2%}" + "*" * int(win_rate * 50) + " " * int(50 - win_rate * 50) + "|")
-        Agent1.test_data.append(win_rate)
+        if tag not in Agent1.test_data:
+            Agent1.test_data[tag] = []
+        Agent1.test_data[tag].append(win_rate)
 
 
 def main():
@@ -278,8 +280,9 @@ def main():
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
     loopers = [
-        Looper(lambda s: "一" if s[1] > 0 else ("单" if s[0] > 0 else "生")),
-        Looper(lambda s: "一" if s[1] > 0 else ("双" if s[0] > 1 else "生"))
+        Looper(lambda s: "一" if s[1] >= 1 else ("单" if s[0] >= 1 else "生")),
+        Looper(lambda s: "一" if s[1] >= 1 else ("双" if s[0] >= 2 else "生")),
+        Looper(lambda s: "二" if s[1] >= 2 else ("地" if s[0] >= 3 else "生"))
     ]
     TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
     history = []
@@ -290,13 +293,15 @@ def main():
                     history.append(deepcopy(trainee))
                     if len(history) > 20:
                         history.pop(random.randint(0, len(history) - 1))
-                Agent.test(trainee, randomer)
+                Agent.test(trainee, randomer, "Trainee vs Randomer")
+                for i in range(len(loopers)):
+                    Agent.test(trainee, loopers[i], "Trainee vs Looper " + str(i))
             r = random.random()
             random_starts = random.random() < 0.6
-            if len(history) == 0 or r < 0.4:
-                trainee.play_round(random_starts, trainee)
-            elif r < 0.9:
+            if r < 0.6 and len(history) > 0:
                 trainee.play_round(random_starts, random.choice(history))
+            elif r < 0.8:
+                trainee.play_round(random_starts, trainee)
             elif r < 0.95:
                 trainee.play_round(random_starts, random.choice(loopers))
             else:
@@ -309,8 +314,9 @@ def main():
         trainee.save_q_table_and_configs()
     finally:
         SMOOTHNESS = trainee.HYPERPARAMETER_DICT["SMOOTHNESS"]
-        smooth_data = [statistics.mean(trainee.test_data[i : i + SMOOTHNESS]) for i in range(len(trainee.test_data) - SMOOTHNESS)]
-        plt.plot(list(range(len(trainee.test_data) - SMOOTHNESS)), smooth_data, color="black", label="Win Rate", linewidth=1, linestyle="-", marker="o")
+        for k, v in trainee.test_data.items():
+            smooth_data = [statistics.mean(v[i: i + SMOOTHNESS]) for i in range(len(v) - SMOOTHNESS)]
+            plt.plot(list(range(len(v) - SMOOTHNESS)), smooth_data, label=k, linewidth=1, linestyle="-", marker="o")
         plt.title("Win Rate", fontsize=14, fontweight="bold")
         plt.xlabel("Time", fontsize=12)
         plt.ylabel("Win Rate", fontsize=12)
