@@ -1,3 +1,4 @@
+from random import randint
 import sys
 import joblib
 from sklearn.tree import DecisionTreeClassifier, export_text
@@ -22,7 +23,7 @@ def data_prepare(path):
             if k not in usable_movements:
                 usable_movements[k] = ([], [])
             def unblur(x):
-                return [0, 1, 2, 3, 5, 7, 10, 13][x]
+                return randint([0, 1, 2, 3, 5, 7, 10, 13][x], [0, 1, 2, 4, 6, 9, 11, 15][x])
             usable_movements[k][0].append([kk[0][0], kk[0][1], unblur(kk[1][0]), unblur(kk[1][1])])
             usable_movements[k][1].append(int(v >= 0.9))
     return usable_movements
