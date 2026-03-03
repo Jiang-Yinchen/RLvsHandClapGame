@@ -3,3 +3,4 @@ model/
 .idea/
 winrate/
 *.test.py
+map.webp

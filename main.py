@@ -6,6 +6,7 @@ import time
 import json
 import joblib
 import matplotlib.pyplot as plt
+import PIL.Image as Image
 import sys
 import statistics
 from tqdm import tqdm
@@ -72,6 +73,7 @@ class Agent(AbstractActor):
         self.total_round = 0  # 总回合数
         self.test_data = {}
         self.path = ""
+        self.images = []
 
     def init_q_table_and_configs(self, args):
         if len(args) > 2:
@@ -272,6 +274,60 @@ class Agent(AbstractActor):
             Agent1.test_data[tag] = []
         Agent1.test_data[tag].append(win_rate)
 
+    def make_map(self):
+        colors = [
+            (31, 119, 180),  # 蓝
+            (255, 127, 14),  # 橙
+            (44, 160, 44),  # 绿
+            (214, 39, 40),  # 红
+            (148, 103, 189),  # 紫
+            (140, 86, 75),  # 棕
+            (227, 119, 194),  # 粉
+            (127, 127, 127),  # 灰
+            (188, 189, 34),  # 黄绿
+            (23, 190, 207),  # 青
+            (174, 199, 232),  # 浅蓝
+            (255, 187, 120),  # 浅橙
+            (152, 223, 138),  # 浅绿
+            (255, 152, 150),  # 浅红
+            (197, 176, 213),  # 浅紫
+            (196, 156, 148),  # 浅棕
+            (247, 182, 210),  # 浅粉
+            (199, 199, 199),  # 浅灰
+            (219, 219, 141),  # 浅黄绿
+            (158, 218, 229),  # 浅青
+        ]
+        movement_color_dict = {}
+        best_movement_table = [[[] for _ in range(12)] for _ in range(21)]
+        for k, v in self.Q_table.items():
+            for kk, vv in v.items():
+                best_movement_table[k[0][0] + k[0][1]][k[1][0] + k[1][1]].append(kk)
+        for i in range(21):
+            for j in range(12):
+                best_movement_table[i][j] = statistics.multimode(best_movement_table[i][j])[0]
+        img = Image.new('RGB', (21, 12))
+        pixels = img.load()
+        for i in range(21):
+            for j in range(12):
+                if best_movement_table[i][j] not in movement_color_dict:
+                    movement_color_dict[best_movement_table[i][j]] = colors.pop(0)
+                pixels[i, j] = movement_color_dict[best_movement_table[i][j]]
+        img = img.resize((1200, 1200), Image.Resampling.NEAREST)
+        self.images.append(img)
+
+    def make_webp(self, path):
+        self.images[0].save(
+            path,
+            save_all=True,
+            append_images=self.images[1:],
+            duration=500,
+            loop=1,
+            lossless=False,
+            quality=100,
+            format="WebP"
+        )
+        return path
+
 
 def main():
     random.seed(42)
@@ -284,18 +340,19 @@ def main():
         Looper(lambda s: "一" if s[1] >= 1 else ("双" if s[0] >= 2 else "生")),
         Looper(lambda s: "二" if s[1] >= 2 else ("地" if s[0] >= 3 else "生"))
     ]
-    TOTAL_GAME_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"]
+    TOTAL_GAME_ROUND, TEST_PER_ROUND, COPY_PER_ROUND = trainee.HYPERPARAMETER_DICT["TOTAL_GAME_ROUND"], trainee.HYPERPARAMETER_DICT["TEST_PER_ROUND"], trainee.HYPERPARAMETER_DICT["COPY_PER_ROUND"]
     history = []
     try:
         for _ in tqdm(range(TOTAL_GAME_ROUND)):
-            if trainee.game_round % 5000 == 0:
-                if trainee.game_round % 50000 == 0:
+            if trainee.game_round % TEST_PER_ROUND == 0:
+                if trainee.game_round % COPY_PER_ROUND == 0:
                     history.append(deepcopy(trainee))
                     if len(history) > 20:
                         history.pop(random.randint(0, len(history) - 1))
                 Agent.test(trainee, randomer, "Trainee vs Randomer")
                 for i in range(len(loopers)):
                     Agent.test(trainee, loopers[i], "Trainee vs Looper " + str(i))
+                trainee.make_map()
             r = random.random()
             random_starts = random.random() < 0.6
             if r < 0.6 and len(history) > 0:
@@ -313,6 +370,7 @@ def main():
     else:
         trainee.save_q_table_and_configs()
     finally:
+        trainee.make_webp("map.webp")
         SMOOTHNESS = trainee.HYPERPARAMETER_DICT["SMOOTHNESS"]
         for k, v in trainee.test_data.items():
             smooth_data = [statistics.mean(v[i: i + SMOOTHNESS]) for i in range(len(v) - SMOOTHNESS)]

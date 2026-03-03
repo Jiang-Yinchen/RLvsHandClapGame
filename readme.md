@@ -116,6 +116,7 @@ MOVEMENT_TABLE = {
   "ALPHA_MIDDLE": 0.05,
   "ALPHA_MIN": 0.02,
   "ALPHA_SECOND_DECAY_EPISODES": 180,
+  "COPY_PER_ROUND": 50000,
   "GAMMA": 0.9,
   "ROUND_PER_TEST": 2000,
   "SMOOTHNESS": 5,
@@ -123,6 +124,7 @@ MOVEMENT_TABLE = {
   "TEMPERATURE_DECAY_ROUNDS": 400000,
   "TEMPERATURE_MIN": 0.1,
   "TEMPERATURE_TEST": 0.1,
+  "TEST_PER_ROUND": 5000,
   "TOTAL_GAME_ROUND": 500000
 }
 ```
@@ -136,12 +138,14 @@ MOVEMENT_TABLE = {
 | `ALPHA_MIDDLE`                | 第一段下降结束，第二段下降开始时的学习率       |
 | `ALPHA_MIN`                   | 最小学习率                      |
 | `ALPHA_SECOND_DECAY_EPISODES` | 学习率的第二段下降区间的长度             |
+| `COPY_PER_ROUND`              | 复制自身进入历史池的间隔轮数             |
 | `GAMMA`                       | $\gamma$ 值，用来权衡当前奖励和未来长期奖励 |
 | `SMOOTHNESS`                  | 生成图表时模糊窗口的大小               |
 | `TEMPERATURE_0`               | 初始温度                       |
 | `TEMPERATURE_DECAY_ROUNDS`    | 温度下降的轮数                    |
 | `TEMPERATURE_MIN`             | 最低温度                       |
-| `TEMPERATURE_TEST`            | 测试时的温度                     | 
+| `TEMPERATURE_TEST`            | 测试时的温度                     |
+| `TEST_PER_ROUND`              | 两轮测试之间隔的轮数                 |
 | `TOTAL_GAME_ROUND`            | 训练总轮数                      |
 
 ---
