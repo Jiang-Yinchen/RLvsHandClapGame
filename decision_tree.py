@@ -60,7 +60,7 @@ def generated_tree(usable_movements):
     return rules
 
 def main(arg):
-    rules = generated_tree(data_prepare(arg))
+    rules = generated_tree(data_prepare(arg[0]))
     for rule in rules.values():
         print(rule)
         print()
@@ -68,4 +68,4 @@ def main(arg):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1:])

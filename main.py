@@ -329,10 +329,10 @@ class Agent(AbstractActor):
         return path
 
 
-def main():
+def main(args):
     random.seed(42)
     trainee = Agent()
-    trainee.init_q_table_and_configs(sys.argv[1:])
+    trainee.init_q_table_and_configs(args)
     print(trainee.HYPERPARAMETER_DICT)
     randomer = Foolish(trainee.MOVEMENT_TABLE)
     loopers = [
@@ -386,4 +386,4 @@ def main():
         plt.show()
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
